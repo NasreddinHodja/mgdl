@@ -42,16 +42,15 @@ def main():
 
     args = parse_args()
 
-    download_cmd = "manga-py -R -d . " + "-c 1 " + args.url
+    download_cmd = "manga-py -R -d . " + args.url
     manga_name = args.url.split("/")[-1]
 
     os.system(download_cmd)
 
-    shutil.move(manga_name, manga_name.lower())
+    shutil.move(manga_name, manga_name.lower().replace("-", "_"))
+    manga_name = manga_name.lower().replace("-", "_")
 
     decompress(manga_name.lower())
-
-
 
 if __name__ == "__main__":
     main()
