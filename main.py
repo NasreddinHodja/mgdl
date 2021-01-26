@@ -7,18 +7,24 @@ import zipfile
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("url", help="manga url")
+    subparser = parser.add_subparsers()
+    parser.add_argument("-d", "--download",
+                        metavar="URL",
+                        help="url of manga to download")
+    parser.add_argument("-u", "--update",
+                        metavar="MANGA",
+                        help="name of manga to update")
     args = parser.parse_args()
 
     return args
 
 def decompress(manga_name):
-
     os.chdir(manga_name)
+
     for vol_name in os.listdir():
         if "vol" not in vol_name: continue
 
-        chap_num = "0" + vol_name.split("_")[1][:3]
+        chap_num = "0" + vol_name.split("_")[1].split(".")[0]
         chap_name = "chapter_" + chap_num
 
         if chap_name not in os.listdir():
@@ -37,20 +43,52 @@ def decompress(manga_name):
 
     os.chdir("..")
 
+def skip_chaps(manga):
+    chaps = [c.split("_")[1]
+             for c in os.listdir(manga) if "chapter" in c]
+    latest = max(chaps)
+
+    count = 0
+    for chap in chaps:
+        if chap <= latest: count += 1
+
+    return str(count)
+
+def name_to_url(name):
+    name = "-".join([w.capitalize() for w in name.split("_")])
+    return "https://manga4life.com/manga/" + name
+
 def main():
     os.chdir("/mnt/nasHDD/manga/")
 
     args = parse_args()
 
-    download_cmd = "manga-py -R -d . " + args.url
-    manga_name = args.url.split("/")[-1]
+    if args.download is not None:
+        download_cmd = "manga-py -R -d . " + args.download
+        manga_name = args.download.split("/")[-1]
 
-    os.system(download_cmd)
+        os.system(download_cmd)
 
-    shutil.move(manga_name, manga_name.lower().replace("-", "_"))
-    manga_name = manga_name.lower().replace("-", "_")
+        shutil.move(manga_name, manga_name.lower().replace("-", "_"))
+        manga_name = manga_name.lower().replace("-", "_")
 
-    decompress(manga_name.lower())
+        decompress(manga_name.lower())
+
+    if args.update is not None:
+        url = name_to_url(args.update)
+        download_cmd = "manga-py -s " + skip_chaps(args.update) + " -R -d . " + url
+
+        os.system(download_cmd)
+
+        for vol in os.listdir(url.split("/")[-1]):
+            if "vol" not in vol: continue
+
+            shutil.move(url.split("/")[-1] + "/" + vol,
+                        args.update)
+
+        os.rmdir(url.split("/")[-1])
+
+        decompress(args.update)
 
 if __name__ == "__main__":
     main()
