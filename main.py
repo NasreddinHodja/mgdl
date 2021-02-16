@@ -80,15 +80,16 @@ def main():
 
         os.system(download_cmd)
 
-        for vol in os.listdir(url.split("/")[-1]):
-            if "vol" not in vol: continue
+        if url.split("/")[-1] in os.listdir():
+            for vol in os.listdir(url.split("/")[-1]):
+                if "vol" not in vol: continue
 
-            shutil.move(url.split("/")[-1] + "/" + vol,
-                        args.update)
+                shutil.move(url.split("/")[-1] + "/" + vol,
+                            args.update)
 
-        os.rmdir(url.split("/")[-1])
+            os.rmdir(url.split("/")[-1])
 
-        decompress(args.update)
+            decompress(args.update)
 
 if __name__ == "__main__":
     main()
