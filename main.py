@@ -6,6 +6,8 @@ import argparse
 import shutil
 import zipfile
 
+from query import search
+
 def parse_args():
     parser = argparse.ArgumentParser()
     subparser = parser.add_subparsers()
@@ -15,6 +17,9 @@ def parse_args():
     parser.add_argument("-u", "--update",
                         metavar="MANGA",
                         help="name of manga to update")
+    parser.add_argument("-s", "--search",
+                        help="search for manga",
+                        action="store_true")
     args = parser.parse_args()
 
     return args
@@ -64,6 +69,11 @@ def main():
 
     args = parse_args()
 
+
+    if args.search:
+        manga_url = search()
+        args.download = "https://manga4life.com/manga/" + manga_url
+
     if args.download is not None:
         download_cmd = "manga-py -R -d . " + args.download
         manga_name = args.download.split("/")[-1]
@@ -75,7 +85,7 @@ def main():
 
         decompress(manga_name.lower())
 
-    if args.update is not None:
+    elif args.update is not None:
         url = name_to_url(args.update)
         download_cmd = "manga-py -s " + skip_chaps(args.update) + " -R -d . " + url
 
