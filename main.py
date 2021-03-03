@@ -22,7 +22,7 @@ def parse_args():
                         action="store_true")
     args = parser.parse_args()
 
-    return args
+    return parser, args
 
 def decompress(manga_name):
     os.chdir(manga_name)
@@ -67,7 +67,7 @@ def name_to_url(name):
 def main():
     os.chdir("/mnt/nasHDD/manga/")
 
-    args = parse_args()
+    parser, args = parse_args()
 
 
     if args.search:
@@ -101,6 +101,9 @@ def main():
             os.rmdir(url.split("/")[-1])
 
             decompress(args.update)
+    else:
+        print(parser.print_help())
+
 
 if __name__ == "__main__":
     main()
