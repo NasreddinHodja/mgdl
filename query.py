@@ -3,12 +3,10 @@ import os
 import re
 import json
 from bs4 import BeautifulSoup
-# from pyfzf.pyfzf import FzfPrompt
 from iterfzf import iterfzf
 import pandas as pd
 
 def search():
-    # fzf = FzfPrompt()
 
     if("manga_index.csv" not in os.listdir()):
         dl_manga_index()
