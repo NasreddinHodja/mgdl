@@ -3,18 +3,23 @@ import os
 import re
 import json
 from bs4 import BeautifulSoup
-from pyfzf.pyfzf import FzfPrompt
+# from pyfzf.pyfzf import FzfPrompt
+from iterfzf import iterfzf
 import pandas as pd
 
 def search():
-    fzf = FzfPrompt()
+    # fzf = FzfPrompt()
 
     if("manga_index.csv" not in os.listdir()):
         dl_manga_index()
 
     mangas = pd.read_csv("manga_index.csv")
 
-    manga = fzf.prompt(mangas["s"])[0]
+    manga = iterfzf(mangas["s"])
+
+    if manga is None:
+        return None
+
     url = str(mangas[mangas["s"] == manga]["i"].values[0])
 
     return url

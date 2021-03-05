@@ -72,6 +72,9 @@ def main():
 
     if args.search:
         manga_url = search()
+        if manga_url is None:
+            return
+
         args.download = "https://manga4life.com/manga/" + manga_url
 
     if args.download is not None:
