@@ -1,4 +1,5 @@
 import requests
+import os
 import re
 import json
 from bs4 import BeautifulSoup
@@ -8,6 +9,17 @@ import pandas as pd
 def search():
     fzf = FzfPrompt()
 
+    if("manga_index.csv" not in os.listdir()):
+        dl_manga_index()
+
+    mangas = pd.read_csv("manga_index.csv")
+
+    manga = fzf.prompt(mangas["s"])[0]
+    url = str(mangas[mangas["s"] == manga]["i"].values[0])
+
+    return url
+
+def dl_manga_index():
     query_url = ("https://manga4life.com/search/")
 
     soup = BeautifulSoup(requests.get(query_url).content, "html.parser")
@@ -19,8 +31,4 @@ def search():
             + "}")
 
     mangas = pd.DataFrame(json.loads(data)["mangas"])
-
-    manga = fzf.prompt(mangas["s"])[0]
-    url = str(mangas[mangas["s"] == manga]["i"].values[0])
-
-    return url
+    mangas.to_csv("manga_index.csv")
