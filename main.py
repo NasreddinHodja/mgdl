@@ -6,8 +6,8 @@ import argparse
 import shutil
 import zipfile
 
-from query import search
 from downloader import Downloader
+from query import Query
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -33,7 +33,7 @@ def main():
     dldr = Downloader()
 
     if args.search:
-        manga_url = search()
+        manga_url = Query.search()
         if manga_url is None:
             return
 

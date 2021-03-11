@@ -6,32 +6,33 @@ from bs4 import BeautifulSoup
 from iterfzf import iterfzf
 import pandas as pd
 
-def search():
+class Query:
 
-    if("manga_index.csv" not in os.listdir()):
-        dl_manga_index()
+    def search():
+        if("manga_index.csv" not in os.listdir()):
+            self.dl_manga_index()
 
-    mangas = pd.read_csv("manga_index.csv")
+        mangas = pd.read_csv("manga_index.csv")
 
-    manga = iterfzf(mangas["s"])
+        manga = iterfzf(mangas["s"])
 
-    if manga is None:
-        return None
+        if manga is None:
+            return None
 
-    url = str(mangas[mangas["s"] == manga]["i"].values[0])
+        url = str(mangas[mangas["s"] == manga]["i"].values[0])
 
-    return url
+        return url
 
-def dl_manga_index():
-    query_url = ("https://manga4life.com/search/")
+    def dl_manga_index():
+        query_url = ("https://manga4life.com/search/")
 
-    soup = BeautifulSoup(requests.get(query_url).content, "html.parser")
+        soup = BeautifulSoup(requests.get(query_url).content, "html.parser")
 
-    pattern = re.compile(r"vm.Directory\s+=\s+\[(.*)\];")
-    script = soup.find("script", text=pattern)
-    data = ("{ \"mangas\": " +
-            "".join(pattern.search(script.__str__()).group().split(" = ")[1:])[:-1]
-            + "}")
+        pattern = re.compile(r"vm.Directory\s+=\s+\[(.*)\];")
+        script = soup.find("script", text=pattern)
+        data = ("{ \"mangas\": " +
+                "".join(pattern.search(script.__str__()).group().split(" = ")[1:])[:-1]
+                + "}")
 
-    mangas = pd.DataFrame(json.loads(data)["mangas"])
-    mangas.to_csv("manga_index.csv")
+        mangas = pd.DataFrame(json.loads(data)["mangas"])
+        mangas.to_csv("manga_index.csv")
