@@ -26,7 +26,7 @@ def parse_args():
     return parser, args
 
 def main():
-    os.chdir("/mnt/nasHDD/manga/")
+    os.chdir("/mnt/storage/manga/")
 
     parser, args = parse_args()
 
