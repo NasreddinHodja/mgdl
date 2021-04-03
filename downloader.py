@@ -69,7 +69,7 @@ class Downloader:
 
             os.rmdir(self.manga_url.split("/")[-1])
 
-            decompress(self.manga_dir)
+            self.decompress()
 
     def download(self):
         if self.manga_url is None:
