@@ -15,8 +15,9 @@ class Downloader:
         for vol_name in os.listdir():
             if "vol" not in vol_name: continue
 
-            chap_num = "0" + vol_name.split("_")[1].split(".")[0]
-            chap_name = "chapter_" + chap_num
+            chap_subnum = vol_name.split("-")[1].split(".")[0]
+            chap_num = vol_name.split("_")[1].split(".")[0].split("-")[0].zfill(4)
+            chap_name = "chapter_" + chap_num + "-" + chap_subnum
 
             if chap_name not in os.listdir():
                 os.mkdir(chap_name)
