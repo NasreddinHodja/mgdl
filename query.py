@@ -10,7 +10,7 @@ class Query:
 
     def search():
         if("manga_index.csv" not in os.listdir()):
-            self.dl_manga_index()
+            Query.dl_manga_index()
 
         mangas = pd.read_csv("manga_index.csv")
 
