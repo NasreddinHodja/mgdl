@@ -30,6 +30,7 @@ class Downloader:
 
             os.remove("info.txt")
 
+            if vol_name in os.listdir(): os.remove(vol_name)
             os.chdir("..")
             os.remove(vol_name)
 
@@ -54,10 +55,8 @@ class Downloader:
     def update(self):
         self.dir_to_url()
 
-        download_cmd = ("manga-py -s " +
-                        self.skip_chaps() +
-                        " -R -d . " +
-                        self.manga_url)
+        download_cmd = ("manga-py --global-progress -s " + self.skip_chaps() +
+                        " -R -d . " + self.manga_url)
 
         os.system(download_cmd)
 
@@ -76,9 +75,11 @@ class Downloader:
         if self.manga_url is None:
             raise Exception("No manga url")
 
-        download_cmd = "manga-py -R -d . " + self.manga_url
+        download_cmd = "manga-py --global-progress -R -d . " + self.manga_url
         manga_name = self.manga_url.split("/")[-1]
         self.manga_dir = manga_name.lower().replace("-", "_")
+
+        print(f"Downloading {manga_name}...")
 
         os.system(download_cmd)
 
