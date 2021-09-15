@@ -14,7 +14,7 @@ class Query:
 
         mangas = pd.read_csv("manga_index.csv")
 
-        manga = iterfzf(mangas["s"])
+        manga = iterfzf(mangas["s"], exact=True)
 
         if manga is None:
             return None
