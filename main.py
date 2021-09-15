@@ -7,7 +7,7 @@ import shutil
 import zipfile
 
 from downloader import Downloader
-from query import Query
+import query
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -33,15 +33,19 @@ def main():
     dldr = Downloader()
 
     if args.search:
-        manga_url = Query.search()
-        if manga_url is None:
+        manga_names = query.search()
+
+        if manga_names is None:
             return
 
-        args.download = "https://manga4life.com/manga/" + manga_url
+        args.download = []
+        for manga_name in manga_names:
+            args.download += ["https://manga4life.com/manga/" + manga_name]
 
     if args.download is not None:
-        dldr.manga_url = args.download
-        dldr.download()
+        for url in args.download:
+            dldr.manga_url = url
+            dldr.download()
     elif args.update is not None:
         dldr.manga_dir = args.update
         dldr.update()
