@@ -19,9 +19,10 @@ class Downloader:
             chap_num = vol_name.split("_")[1].split(".")[0].split("-")[0].zfill(4)
             chap_name = "chapter_" + chap_num + "-" + chap_subnum
 
-            if chap_name not in os.listdir():
-                os.mkdir(chap_name)
-                shutil.copy(vol_name, f"{chap_name}/{vol_name}")
+            if chap_name in os.listdir():
+                shutil.rmtree(chap_name)
+            os.mkdir(chap_name)
+            shutil.copy(vol_name, f"{chap_name}/{vol_name}")
 
             os.chdir(chap_name)
 
@@ -39,13 +40,7 @@ class Downloader:
     def skip_chaps(self):
         chaps = [c.split("_")[1]
                 for c in os.listdir(self.manga_dir) if "chapter" in c]
-        latest = max(chaps)
-
-        count = 0
-        for chap in chaps:
-            if chap <= latest: count += 1
-
-        return str(count)
+        return str(len(chaps))
 
     def dir_to_url(self):
         url_name = "-".join([w.capitalize() for w in self.manga_dir.split("_")])

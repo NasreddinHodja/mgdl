@@ -21,6 +21,14 @@ def search():
     names = mangas[mangas["s"].isin(selected)].loc[:, ["i"]]
     return names["i"]
 
+def get_updatables():
+    if("manga_index.csv" not in os.listdir()):
+        Query.dl_manga_index()
+
+    mangas = pd.read_csv("manga_index.csv")
+    ongoing = mangas[mangas["ps"] == "Ongoing"]["i"]
+    return list(ongoing)
+
 def dl_manga_index():
     query_url = ("https://manga4life.com/search/")
 
