@@ -16,7 +16,8 @@ class Downloader:
             if "vol" not in vol_name: continue
 
             chap_subnum = vol_name.split("-")[1].split(".")[0]
-            chap_num = vol_name.split("_")[1].split(".")[0].split("-")[0].zfill(4)
+            chap_num = (vol_name.split("_")[1]
+                        .split(".")[0].split("-")[0].zfill(4))
             chap_name = "chapter_" + chap_num + "-" + chap_subnum
 
             if chap_name in os.listdir():
@@ -38,8 +39,10 @@ class Downloader:
         os.chdir("..")
 
     def skip_chaps(self):
-        chaps = [c.split("_")[1]
-                for c in os.listdir(self.manga_dir) if "chapter" in c]
+        chaps = set([c.split("_")[1].split("-")[0]
+                     for c in os.listdir(self.manga_dir)
+                     if ("chapter" in c)])
+
         return str(len(chaps))
 
     def dir_to_url(self):
@@ -78,7 +81,6 @@ class Downloader:
 
         os.system(download_cmd)
 
-        os.listdir()
         shutil.move(manga_name, self.manga_dir)
 
         self.decompress()
