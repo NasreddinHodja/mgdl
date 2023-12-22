@@ -3,28 +3,30 @@
 import os
 
 import argparse
-import shutil
-import zipfile
 
 from downloader import Downloader
 import query
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
-    subparser = parser.add_subparsers()
-    parser.add_argument("-d", "--download",
-                        metavar="URL",
-                        help="url of manga to download")
-    parser.add_argument("-u", "--update",
-                        nargs="?", const="*", default=None,
-                        metavar="MANGA",
-                        help="name of manga to update")
-    parser.add_argument("-s", "--search",
-                        help="search for manga",
-                        action="store_true")
+    parser.add_argument(
+        "-d", "--download", metavar="URL", help="url of manga to download"
+    )
+    parser.add_argument(
+        "-u",
+        "--update",
+        nargs="?",
+        const="*",
+        default=None,
+        metavar="MANGA",
+        help="name of manga to update",
+    )
+    parser.add_argument("-s", "--search", help="search for manga", action="store_true")
     args = parser.parse_args()
 
     return parser, args
+
 
 def main():
     local_mangas = "/media/manga/"
@@ -50,9 +52,10 @@ def main():
             dldr.download()
     elif args.update is not None:
         if args.update == "*":
-            updatables = list(set([x.lower().replace("-", "_")
-                                   for x in query.get_updatables()]) &
-                              set(os.listdir()))
+            updatables = list(
+                set([x.lower().replace("-", "_") for x in query.get_updatables()])
+                & set(os.listdir())
+            )
             for manga in updatables:
                 print(f"Trying to update {manga} ...")
                 dldr.manga_dir = manga
@@ -65,8 +68,8 @@ def main():
         print(parser.print_help())
 
 
-if __name__ == '__main__':
-  try:
-    main()
-  except KeyboardInterrupt:
-    pass
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
