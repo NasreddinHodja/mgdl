@@ -3,6 +3,7 @@
 import os
 
 import argparse
+import toml
 
 from downloader import Downloader
 import query
@@ -28,8 +29,17 @@ def parse_args():
     return parser, args
 
 
+def parse_configs():
+    try:
+        with open(os.path.expanduser("~/.config/mgdl/config.toml"), "r") as config_file:
+            config = toml.load(config_file)
+            return os.path.expanduser(config["manga_dir"])
+    except Exception:
+        print("No config file found. Make sure you have a ~/.config/mgdl/config.toml")
+
+
 def main():
-    local_mangas = "/media/manga/"
+    local_mangas = parse_configs()
     os.chdir(local_mangas)
 
     parser, args = parse_args()
@@ -65,7 +75,7 @@ def main():
             dldr.manga_dir = args.update
             dldr.update()
     else:
-        print(parser.print_help())
+        parser.print_help()
 
 
 if __name__ == "__main__":
