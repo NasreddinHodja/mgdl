@@ -5,45 +5,45 @@ import zipfile
 
 class Downloader:
 
-    def __init__(self, manga_dir=None, manga_url=None):
+    def __init__(self, local_dir=None, manga_dir=None, manga_url=None):
+        self.local_dir = local_dir
         self.manga_dir = manga_dir
         self.manga_url = manga_url
 
-    def decompress(self):
-        os.chdir(self.manga_dir)
+    def organize(self):
+        os.chdir(f"{self.local_dir}{self.manga_dir}")
 
-        for vol_name in os.listdir():
-            if "vol" not in vol_name: continue
+        dir_contents = os.listdir()
 
-            chap_subnum = vol_name.split("-")[1].split(".")[0]
-            chap_num = (vol_name.split("_")[1]
-                        .split(".")[0].split("-")[0].zfill(4))
-            chap_name = "chapter_" + chap_num + "-" + chap_subnum
+        for page_name in dir_contents:
+            if "_c" not in page_name : continue
 
-            if chap_name in os.listdir():
-                shutil.rmtree(chap_name)
-            os.mkdir(chap_name)
-            shutil.copy(vol_name, f"{chap_name}/{vol_name}")
+            chapter_and_page = page_name[:-4]
 
-            os.chdir(chap_name)
+            [_, chapter_number, page_number] = chapter_and_page.split("_")
+            chapter_number = chapter_number.split('.')
+            if len(chapter_number) == 1:
+                chapter_number += ['1']
+            chapter_number[0] = chapter_number[0][1:].zfill(4)
+            chapter_number = '_'.join(chapter_number)
+            chapter_dir = f"chapter_{chapter_number}"
 
-            with zipfile.ZipFile(vol_name, "r") as zip_ref:
-                zip_ref.extractall(".")
+            if chapter_dir not in os.listdir():
+                os.mkdir(chapter_dir)
 
-            os.remove("info.txt")
+            shutil.move(page_name, f"{chapter_dir}/{page_number}.jpg")
 
-            if vol_name in os.listdir(): os.remove(vol_name)
-            os.chdir("..")
-            os.remove(vol_name)
+        os.chdir('..')
 
-        os.chdir("..")
 
     def skip_chaps(self):
-        chaps = set([c.split("_")[1].split("-")[0]
-                     for c in os.listdir(self.manga_dir)
-                     if ("chapter" in c)])
+        chaps = set([
+            c.split("_")[1].split("-")[0]
+            for c in os.listdir(self.manga_dir)
+            if ("chapter" in c)
+        ])
 
-        return str(len(chaps))
+        return str(max(chaps))
 
     def dir_to_url(self):
         url_name = "-".join([w.capitalize() for w in self.manga_dir.split("_")])
@@ -53,34 +53,22 @@ class Downloader:
     def update(self):
         self.dir_to_url()
 
-        download_cmd = ("manga-py --global-progress -s " + self.skip_chaps() +
-                        " -R -d . " + self.manga_url)
+        download_cmd = (f"gallery-dl -D {self.local_dir}{self.manga_dir} --chapter-filter " + f"'{self.skip_chaps()} < chapter' " + self.manga_url)
 
         os.system(download_cmd)
 
-        if self.manga_url.split("/")[-1] in os.listdir():
-            for vol in os.listdir(self.manga_url.split("/")[-1]):
-                if "vol" not in vol: continue
-
-                shutil.move(self.manga_url.split("/")[-1] + "/" + vol,
-                            self.manga_dir)
-
-            os.rmdir(self.manga_url.split("/")[-1])
-
-            self.decompress()
+        self.organize()
 
     def download(self):
         if self.manga_url is None:
             raise Exception("No manga url")
 
-        download_cmd = "manga-py --global-progress -R -d . " + self.manga_url
         manga_name = self.manga_url.split("/")[-1]
         self.manga_dir = manga_name.lower().replace("-", "_")
+        download_cmd = f"gallery-dl -D {self.local_dir}{self.manga_dir} {self.manga_url}"
 
         print(f"Downloading {manga_name}...")
 
         os.system(download_cmd)
 
-        shutil.move(manga_name, self.manga_dir)
-
-        self.decompress()
+        self.organize()

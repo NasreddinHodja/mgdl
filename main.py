@@ -44,7 +44,7 @@ def main():
 
     parser, args = parse_args()
 
-    dldr = Downloader()
+    dldr = Downloader(local_dir=local_mangas)
 
     if args.search:
         manga_names = query.search()
@@ -57,8 +57,12 @@ def main():
             args.download += ["https://manga4life.com/manga/" + manga_name]
 
     if args.download is not None:
-        for url in args.download:
-            dldr.manga_url = url
+        if isinstance(args.download, list):
+            for url in args.download:
+                dldr.manga_url = url
+                dldr.download()
+        else:
+            dldr.manga_url = args.download
             dldr.download()
     elif args.update is not None:
         if args.update == "*":

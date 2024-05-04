@@ -1,6 +1,6 @@
 # mgdl
 
-Download manga with Python using [manga-py](https://github.com/manga-py/manga-py).
+Download manga with Python using [gallery-dl](https://github.com/mikf/gallery-dl).
 
 ## Usage
 
@@ -14,4 +14,4 @@ options:
   -u [MANGA], --update [MANGA]
                         name of manga to update
   -s, --search          search for manga
-  ```
+```
