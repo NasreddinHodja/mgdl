@@ -43,7 +43,7 @@ class Downloader:
             if ("chapter" in c)
         ])
 
-        return str(max(chaps))
+        return str(max(chaps)).lstrip("0")
 
     def dir_to_url(self):
         url_name = "-".join([w.capitalize() for w in self.manga_dir.split("_")])
@@ -53,7 +53,7 @@ class Downloader:
     def update(self):
         self.dir_to_url()
 
-        download_cmd = (f"gallery-dl -D {self.local_dir}{self.manga_dir} --chapter-filter " + f"'{self.skip_chaps()} < chapter' " + self.manga_url)
+        download_cmd = (f"gallery-dl -D {self.local_dir}{self.manga_dir} --chapter-filter '" + self.skip_chaps() + " < chapter' " + self.manga_url)
 
         os.system(download_cmd)
 
