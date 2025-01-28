@@ -23,6 +23,13 @@ def parse_args():
         metavar="MANGA",
         help="name of manga to update",
     )
+    parser.add_argument(
+        "-o",
+        "--organize",
+        default=None,
+        metavar="MANGA_DIR",
+        help="path of manga directory to organize",
+    )
     parser.add_argument("-s", "--search", help="search for manga", action="store_true")
     args = parser.parse_args()
 
@@ -56,7 +63,7 @@ def main():
         for manga_name in manga_names:
             args.download += ["https://manga4life.com/manga/" + manga_name]
 
-    if args.download is not None:
+    if not args.download is None:
         if isinstance(args.download, list):
             for url in args.download:
                 dldr.manga_url = url
@@ -64,6 +71,8 @@ def main():
         else:
             dldr.manga_url = args.download
             dldr.download()
+    elif not args.organize is None:
+        dldr.organize(args.organize)
     elif args.update is not None:
         if args.update == "*":
             updatables = list(
@@ -80,7 +89,6 @@ def main():
             dldr.update()
     else:
         parser.print_help()
-
 
 if __name__ == "__main__":
     try:

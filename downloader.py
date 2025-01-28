@@ -1,8 +1,6 @@
 import os
 import shutil
 
-import zipfile
-
 class Downloader:
 
     def __init__(self, local_dir=None, manga_dir=None, manga_url=None):
@@ -10,7 +8,10 @@ class Downloader:
         self.manga_dir = manga_dir
         self.manga_url = manga_url
 
-    def organize(self):
+    def organize(self, manga_dir=None):
+        if not manga_dir is None:
+            self.manga_dir = manga_dir
+
         os.chdir(f"{self.local_dir}{self.manga_dir}")
 
         dir_contents = os.listdir()
@@ -63,7 +64,7 @@ class Downloader:
         if self.manga_url is None:
             raise Exception("No manga url")
 
-        manga_name = self.manga_url.split("/")[-1]
+        manga_name = list(filter(lambda s: s != "", self.manga_url.split("/")))[-1]
         self.manga_dir = manga_name.lower().replace("-", "_")
         download_cmd = f"gallery-dl -D {self.local_dir}{self.manga_dir} {self.manga_url}"
 
@@ -71,4 +72,4 @@ class Downloader:
 
         os.system(download_cmd)
 
-        self.organize()
+        # self.organize()
