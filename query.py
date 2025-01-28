@@ -2,33 +2,42 @@ import requests
 import os
 import re
 import json
+import csv
 from bs4 import BeautifulSoup
 from iterfzf import iterfzf
-import pandas as pd
 
 
 def search():
     if "manga_index.csv" not in os.listdir():
         dl_manga_index()
 
-    mangas = pd.read_csv("manga_index.csv")
+    mangas = []
+    with open("manga_index.csv", mode="r", newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            mangas.append(row)
 
-    selected = iterfzf(mangas["s"], exact=True, multi=True)
+    selected = iterfzf([manga["s"] for manga in mangas], exact=True, multi=True)
 
     if selected is None:
         return None
 
-    names = mangas[mangas["s"].isin(selected)].loc[:, ["i"]]
-    return names["i"]
+    names = [manga["i"] for manga in mangas if manga["s"] in selected]
+    return names
 
 
 def get_updatables():
     if "manga_index.csv" not in os.listdir():
         dl_manga_index()
 
-    mangas = pd.read_csv("manga_index.csv")
-    ongoing = mangas[mangas["ps"] == "Ongoing"]["i"]
-    return list(ongoing)
+    mangas = []
+    with open("manga_index.csv", mode="r", newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            if row["ps"] == "Ongoing":
+                mangas.append(row["i"])
+
+    return mangas
 
 
 def dl_manga_index():
@@ -44,6 +53,10 @@ def dl_manga_index():
         raise Exception("Manga index not found.")
 
     data = '{ "mangas": ' + ("".join(directory.group().split(" = ")[1:])[:-1]) + "}"
+    mangas = json.loads(data)["mangas"]
 
-    mangas = pd.DataFrame(json.loads(data)["mangas"])
-    mangas.to_csv("manga_index.csv")
+    with open("manga_index.csv", mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=mangas[0].keys())
+        writer.writeheader()
+        writer.writerows(mangas)
+
