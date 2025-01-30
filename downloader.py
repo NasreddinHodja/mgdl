@@ -43,6 +43,7 @@ class Downloader:
             for c in os.listdir(self.manga_dir)
             if ("chapter" in c)
         ])
+        if len(chaps) == 0: chaps = [0]
 
         return str(max(chaps)).lstrip("0")
 
