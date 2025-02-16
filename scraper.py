@@ -84,7 +84,7 @@ def manga_from_url(url: str) -> Tuple[Manga, list[Chapter]]:
                 ][0]
                 status = value
 
-        normalized_name = url.split("/")[-1].lower()
+        normalized_name = url.split("/")[-1].lower().replace("-", "_")
         manga = Manga.create(hash, name, normalized_name, authors, status)
         chapters = get_chapters(manga.hash, manga.id)
 
