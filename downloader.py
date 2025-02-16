@@ -1,18 +1,15 @@
 import os
 import shutil
+import scraper
+from db import Db, Manga
 
 class Downloader:
-
-    def __init__(self, local_dir=None, manga_dir=None, manga_url=None):
+    def __init__(self, local_dir=None):
+        Db.init()
         self.local_dir = local_dir
-        self.manga_dir = manga_dir
-        self.manga_url = manga_url
 
-    def organize(self, manga_dir=None):
-        if not manga_dir is None:
-            self.manga_dir = manga_dir
-
-        os.chdir(f"{self.local_dir}{self.manga_dir}")
+    def organize(self, manga_dir):
+        os.chdir(f"{self.local_dir}{manga_dir}")
 
         dir_contents = os.listdir()
 
@@ -24,7 +21,7 @@ class Downloader:
             [_, chapter_number, page_number] = chapter_and_page.split("_")
             chapter_number = chapter_number.split('.')
             if len(chapter_number) == 1:
-                chapter_number += ['1']
+                chapter_number += ['1'.zfill(2)]
             chapter_number[0] = chapter_number[0][1:].zfill(4)
             chapter_number = '_'.join(chapter_number)
             chapter_dir = f"chapter_{chapter_number}"
@@ -36,41 +33,58 @@ class Downloader:
 
         os.chdir('..')
 
+    def add(self, manga_url: str):
+        (manga, chapters) = scraper.manga_from_url(manga_url)
+        Db.add_manga(manga, chapters)
 
-    def skip_chaps(self):
+    def download(self, manga_url: str):
+        self.add(manga_url)
+
+        manga = Db.get_manga(manga_url.split("/")[-2])
+
+        if manga is not None:
+            download_cmd = (
+                f"gallery-dl " +
+                f"-D {self.local_dir}{manga.normalized_name} {manga_url}"
+            )
+            os.system(download_cmd)
+            self.organize(manga.normalized_name)
+
+        else:
+            raise Exception("Couldn't find manga")
+
+    def get_updatables(self) -> list[Manga]:
+        return Db.get_ongoing_manga()
+
+    def skip_chaps(self, manga: Manga):
         chaps = set([
             c.split("_")[1].split("-")[0]
-            for c in os.listdir(self.manga_dir)
+            for c in os.listdir(manga.normalized_name)
             if ("chapter" in c)
         ])
         if len(chaps) == 0: chaps = [0]
-
         return str(max(chaps)).lstrip("0")
 
-    def dir_to_url(self):
-        url_name = "-".join([w.capitalize() for w in self.manga_dir.split("_")])
-        self.manga_url = "https://manga4life.com/manga/" + url_name
-        return self.manga_url
+    def update(self, manga_name: str):
+        result = Db.query_manga(f"select * from mangas where normalized_name = '{manga_name}' limit 1")
+        if len(result) == 0:
+            raise Exception("Couldn't find manga in DB")
 
-    def update(self):
-        self.dir_to_url()
-
-        download_cmd = (f"gallery-dl -D {self.local_dir}{self.manga_dir} --chapter-filter '" + self.skip_chaps() + " < chapter' " + self.manga_url)
-
+        manga = result[0]
+        download_cmd = (
+            f"gallery-dl " +
+            f"-D {self.local_dir}{manga.normalized_name} "
+            f"--chapter-filter '{self.skip_chaps(manga)} < chapter' "
+            f"https://weebcentral.com/series/{manga.hash}"
+        )
         os.system(download_cmd)
+        self.organize(manga.normalized_name)
 
-        self.organize()
+    def remove(self, manga_name: str):
+        result = Db.query_manga(f"select * from mangas where normalized_name = '{manga_name}' limit 1")
+        if len(result) == 0:
+            raise Exception("Couldn't find manga in DB")
 
-    def download(self):
-        if self.manga_url is None:
-            raise Exception("No manga url")
-
-        manga_name = list(filter(lambda s: s != "", self.manga_url.split("/")))[-1]
-        self.manga_dir = manga_name.lower().replace("-", "_")
-        download_cmd = f"gallery-dl -D {self.local_dir}{self.manga_dir} {self.manga_url}"
-
-        print(f"Downloading {manga_name}...")
-
-        os.system(download_cmd)
-
-        # self.organize()
+        manga = result[0]
+        Db.delete_manga(manga.id)
+        os.remove(f"{self.local_dir}{manga.normalized_name}")
