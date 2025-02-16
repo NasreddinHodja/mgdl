@@ -50,6 +50,7 @@ def get_chapters(manga_hash: str, manga_id: str) -> list[Chapter]:
     return chapters
 
 def manga_from_url(url: str) -> Tuple[Manga, list[Chapter]]:
+    print("Getting manga data...")
     response = requests.get(url, headers=REQ_HEADER)
 
     if response.status_code == 200:

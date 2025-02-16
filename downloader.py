@@ -35,6 +35,7 @@ class Downloader:
 
     def add(self, manga_url: str):
         (manga, chapters) = scraper.manga_from_url(manga_url)
+        print(f"Adding {manga.name}...")
         Db.add_manga(manga, chapters)
 
     def download(self, manga_url: str):

@@ -8,10 +8,10 @@ from downloader import Downloader
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-d", "--download", metavar="URL", help="url of manga to download"
+        "-d", "--download", nargs="+", metavar="URL", help="url of manga to download"
     )
     parser.add_argument(
-        "-a", "--add", metavar="URL", help="url of manga to add"
+        "-a", "--add", nargs="+", metavar="URL", help="url of manga to add"
     )
     parser.add_argument(
         "-u",
