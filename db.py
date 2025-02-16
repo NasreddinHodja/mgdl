@@ -238,7 +238,6 @@ class Db:
         conn.close()
         return True
 
-
     @staticmethod
     def delete_manga(manga_id) -> bool:
         conn = sqlite3.connect(DB_PATH)
