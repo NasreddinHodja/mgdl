@@ -22,6 +22,8 @@ class Downloader:
             chapter_number = chapter_number.split('.')
             if len(chapter_number) == 1:
                 chapter_number += ['1'.zfill(2)]
+            else:
+                chapter_number = [chapter_number[0], chapter_number[1].zfill(2)]
             chapter_number[0] = chapter_number[0][1:].zfill(4)
             chapter_number = '_'.join(chapter_number)
             chapter_dir = f"chapter_{chapter_number}"
