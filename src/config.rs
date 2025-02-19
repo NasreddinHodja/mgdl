@@ -1,7 +1,7 @@
-use std::fs;
-use toml;
 use dirs::home_dir;
+use std::fs;
 use std::path::PathBuf;
+use toml;
 
 use directories::ProjectDirs;
 use serde::Deserialize;

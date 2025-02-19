@@ -4,6 +4,7 @@ use std::fmt;
 pub enum MgdlError {
     Config(String),
     Scrape(String),
+    Db(String),
 }
 
 impl fmt::Display for MgdlError {
@@ -11,6 +12,7 @@ impl fmt::Display for MgdlError {
         match self {
             MgdlError::Config(msg) => write!(f, "Config Error: {}", msg),
             MgdlError::Scrape(msg) => write!(f, "Scrape Error: {}", msg),
+            MgdlError::Db(msg) => write!(f, "DB Error: {}", msg),
         }
     }
 }

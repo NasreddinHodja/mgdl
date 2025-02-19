@@ -126,7 +126,7 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
     }
 
     let manga = Manga::new(&hash, &name, &normalized_name, &authors, &status);
-    let chapters = get_manga_chapters(&hash, &manga.id)?;
+    let chapters = get_manga_chapters(&hash, &manga.hash)?;
 
     Ok((manga, chapters))
 }

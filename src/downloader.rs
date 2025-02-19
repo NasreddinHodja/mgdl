@@ -2,11 +2,11 @@ use crate::MgdlError;
 use crate::{db, db::Manga, scrape};
 use std::fs;
 use std::path::PathBuf;
-use std::{fmt::format, process::Command};
+use std::process::{Command, Stdio};
 
 pub struct Downloader {
     db: db::Db,
-    manga_path: PathBuf,
+    manga_dir: PathBuf,
 }
 
 type Result<T> = std::result::Result<T, MgdlError>;
@@ -18,7 +18,7 @@ impl Downloader {
         db.init();
         Self {
             db,
-            manga_path: manga_dir,
+            manga_dir: manga_dir,
         }
     }
 
@@ -31,31 +31,76 @@ impl Downloader {
 
     pub fn download(&self, manga_url: &str) {
         let manga = self.add(manga_url);
-        let manga_path = self.manga_path.join(&manga.normalized_name);
-        self.download_with_gallery_dl(manga);
-        self.organize(manga_path);
+        let manga_dir = self.manga_dir.join(&manga.normalized_name);
+        self.download_with_gallery_dl(&manga, None);
+        self.organize(&manga_dir);
     }
 
-    pub fn download_with_gallery_dl(&self, manga: Manga) {
-        let download_path = self.manga_path.join(&manga.normalized_name);
-        let download_url = format!("https://weebcentral.com/series/{}/", &manga.hash);
+    pub fn update(&self, manga_name: &str) -> Result<Manga> {
+        if let Some(manga) = self.db.get_manga_by_normalized_name(manga_name) {
+            let skip_chaps = self.skip_chaps(&manga);
 
-        let output = Command::new("gallery-dl")
-            .arg("-D")
-            .arg(&download_path)
-            .arg(&download_url)
-            .output()
-            .unwrap();
+            self.download_with_gallery_dl(&manga, Some(skip_chaps));
 
-        if !output.status.success() {
-            panic!(
-                "gallery-dl Error: {}",
-                String::from_utf8(output.stderr).unwrap()
-            );
+            self.organize(&self.manga_dir.join(&manga.normalized_name));
+
+            Ok(manga)
+        } else {
+            Err(MgdlError::Db(format!(
+                "couldn't find manga: {}",
+                manga_name
+            )))
         }
     }
 
-    pub fn organize(&self, dir: PathBuf) {
+    pub fn skip_chaps(&self, manga: &Manga) -> usize {
+        let manga_path = self.manga_dir.join(&manga.normalized_name);
+        let mut chaps: Vec<usize> = fs::read_dir(&manga_path)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| name.contains("chapter"))
+            .filter_map(|name| {
+                name.split('_')
+                    .nth(1)
+                    .and_then(|s| s.split('-').next())
+                    .and_then(|num| num.parse::<usize>().ok())
+            })
+            .collect();
+
+        if chaps.is_empty() {
+            chaps.push(0);
+        }
+
+        *(chaps.iter().max().unwrap())
+    }
+
+    pub fn download_with_gallery_dl(&self, manga: &Manga, skip_chaps: Option<usize>) {
+        let download_path = self.manga_dir.join(&manga.normalized_name);
+        let download_url = format!("https://weebcentral.com/series/{}/", &manga.hash);
+
+        let mut cmd = Command::new("gallery-dl");
+        cmd.arg("-D").arg(&download_path);
+
+        if let Some(skip) = skip_chaps {
+            cmd.arg("--chapter-filter")
+                .arg(format!("{} < chapter", skip));
+        }
+
+        let mut child = cmd
+            .arg(&download_url)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap();
+
+        let status = child.wait().unwrap();
+        if !status.success() {
+            panic!("gallery-dl Error: {:?}", status.code());
+        }
+    }
+
+    pub fn organize(&self, dir: &PathBuf) {
         for entry in fs::read_dir(&dir).unwrap() {
             let entry = entry.unwrap();
             let file_path = entry.path();
@@ -93,5 +138,9 @@ impl Downloader {
             let new_path = chapter_dir.join(format!("{}.jpg", page_number));
             fs::rename(&file_path, &new_path).unwrap();
         }
+    }
+
+    pub fn reset_db(&self) {
+        self.db.drop();
     }
 }

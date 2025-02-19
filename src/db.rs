@@ -1,11 +1,9 @@
-use rusqlite::{Connection};
+use rusqlite::{params, Connection};
 use std::fmt;
 use std::path::PathBuf;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Chapter {
-    pub id: String,
     pub hash: String,
     pub number: String,
     pub manga: String,
@@ -14,7 +12,6 @@ pub struct Chapter {
 impl Chapter {
     pub fn new(hash: &str, number: &str, manga: &str) -> Self {
         Self {
-            id: Uuid::new_v4().to_string(),
             hash: hash.to_string(),
             number: number.to_string(),
             manga: manga.to_string(),
@@ -24,7 +21,6 @@ impl Chapter {
 
 #[derive(Debug)]
 pub struct Manga {
-    pub id: String,
     pub hash: String,
     pub name: String,
     pub normalized_name: String,
@@ -35,7 +31,6 @@ pub struct Manga {
 impl Manga {
     pub fn new(hash: &str, name: &str, normalized_name: &str, authors: &str, status: &str) -> Self {
         Self {
-            id: Uuid::new_v4().to_string(),
             hash: hash.to_string(),
             name: name.to_string(),
             normalized_name: normalized_name.to_string(),
@@ -49,8 +44,8 @@ impl fmt::Display for Manga {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}:\n\tid: {}\n\thash: {}\n\tnormalize_name: {}\n\tauthors: {}\n\tstatus: {}",
-            self.name, self.id, self.hash, self.normalized_name, self.authors, self.status
+            "{}:\n\thash: {}\n\tnormalize_name: {}\n\tauthors: {}\n\tstatus: {}",
+            self.name, self.hash, self.normalized_name, self.authors, self.status
         )
     }
 }
@@ -72,11 +67,10 @@ impl Db {
             .execute(
                 "
                 create table if not exists chapters (
-                    id text primary key,
                     hash text not null,
                     number text not null,
                     manga text,
-                    foreign key (manga) references mangas(id),
+                    foreign key (manga) references mangas(hash),
                     unique(number, manga)
                 )",
                 (),
@@ -86,16 +80,28 @@ impl Db {
             .execute(
                 "
                 create table if not exists mangas (
-                    id text primary key,
-                    hash text not null,
-                    name text not null,
-                    normalized_name text not null,
+                    hash text not null primary key,
+                    name text not null unique,
+                    normalized_name text unique,
                     authors text not null,
-                    status text not null,
-                    unique(name, authors)
+                    status text not null
                 );",
                 [],
             )
+            .unwrap();
+
+        transaction.commit().unwrap();
+    }
+
+    pub fn drop(&self) {
+        let mut conn = Connection::open(&self.path).unwrap();
+        let transaction = conn.transaction().unwrap();
+
+        transaction
+            .execute("drop table if exists chapters", ())
+            .unwrap();
+        transaction
+            .execute(" drop table if exists mangas", ())
             .unwrap();
 
         transaction.commit().unwrap();
@@ -105,7 +111,7 @@ impl Db {
         self.create();
     }
 
-    pub fn upsert_chapters(&self, chapters: &[Chapter], manga_id: &str) {
+    pub fn upsert_chapters(&self, chapters: &[Chapter], manga_hash: &str) {
         let mut conn = Connection::open(&self.path).unwrap();
         let transaction = conn.transaction().unwrap();
 
@@ -113,12 +119,12 @@ impl Db {
             transaction
                 .execute(
                     "
-                    insert into chapters (id, hash, number, manga)
-                    values (?, ?, ?, ?)
+                    insert into chapters (hash, number, manga)
+                    values (?, ?, ?)
                     on conflict(number, manga)
                     do update set hash = excluded.hash
                     ",
-                    (&chapter.id, &chapter.hash, &chapter.number, &manga_id),
+                    (&chapter.hash, &chapter.number, manga_hash),
                 )
                 .unwrap();
         }
@@ -129,13 +135,12 @@ impl Db {
     pub fn upsert_manga(&self, manga: Manga) -> Manga {
         let conn = Connection::open(&self.path).unwrap();
         let existing_manga = conn.query_row(
-            "SELECT id, hash, name, normalized_name, authors, status
+            "SELECT hash, name, normalized_name, authors, status
             FROM mangas
             WHERE name = ? AND authors = ?",
             (&manga.name, &manga.authors),
             |row| {
                 Ok(Manga {
-                    id: row.get(0)?,
                     hash: row.get(1)?,
                     name: row.get(2)?,
                     normalized_name: row.get(3)?,
@@ -151,15 +156,14 @@ impl Db {
 
         conn.execute(
             "
-            insert into mangas (id, hash, name, normalized_name, authors, status)
-            values (?, ?, ?, ?, ?, ?)
-            on conflict(name, authors)
+            insert into mangas (hash, name, normalized_name, authors, status)
+            values (?, ?, ?, ?, ?)
+            on conflict(name)
             do update set hash = excluded.hash,
                 normalized_name = excluded.normalized_name,
                 status = excluded.status
             ",
             (
-                manga.id.to_string(),
                 manga.hash.to_string(),
                 manga.name.to_string(),
                 manga.normalized_name.to_string(),
@@ -174,26 +178,50 @@ impl Db {
 
     pub fn add_manga(&self, manga: Manga, chapters: &[Chapter]) -> Manga {
         let upserted_manga = self.upsert_manga(manga);
-        self.upsert_chapters(chapters, &upserted_manga.id);
+        self.upsert_chapters(chapters, &upserted_manga.hash);
         upserted_manga
     }
 
-    // pub fn print_mangas(&self) {
-    //     let conn = Connection::open(&self.path).unwrap();
-    //     let mut stmt = conn.prepare("select * from mangas").unwrap();
-    //     let rows = stmt
-    //         .query_map([], |row| {
-    //             Ok(Manga {
-    //                 id: row.get(0).unwrap(),
-    //                 hash: row.get(1).unwrap(),
-    //                 name: row.get(2).unwrap(),
-    //                 normalized_name: row.get(3).unwrap(),
-    //                 authors: row.get(4).unwrap(),
-    //                 status: row.get(5).unwrap(),
-    //             })
-    //         })
-    //         .unwrap()
-    //         .collect::<Vec<_>>();
-    //     println!("rows = {rows:#?}");
-    // }
+    pub fn get_manga_by_normalized_name(&self, normalized_name: &str) -> Option<Manga> {
+        let conn = Connection::open(&self.path).unwrap();
+        let mut stmt = conn
+            .prepare("select * from mangas where normalized_name = ?")
+            .unwrap();
+        let rows = stmt
+            .query_map(params![normalized_name], |row| {
+                Ok(Manga {
+                    hash: row.get(0).unwrap(),
+                    name: row.get(1).unwrap(),
+                    normalized_name: row.get(2).unwrap(),
+                    authors: row.get(3).unwrap(),
+                    status: row.get(4).unwrap(),
+                })
+            })
+            .unwrap()
+            .collect::<Vec<_>>();
+
+        for manga in rows {
+            return Some(manga.unwrap());
+        }
+
+        None
+    }
+
+    pub fn query_mangas(&self, query: &str) {
+        let conn = Connection::open(&self.path).unwrap();
+        let mut stmt = conn.prepare(query).unwrap();
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(Manga {
+                    hash: row.get(1).unwrap(),
+                    name: row.get(2).unwrap(),
+                    normalized_name: row.get(3).unwrap(),
+                    authors: row.get(4).unwrap(),
+                    status: row.get(5).unwrap(),
+                })
+            })
+            .unwrap()
+            .collect::<Vec<_>>();
+        println!("result = {rows:#?}");
+    }
 }
