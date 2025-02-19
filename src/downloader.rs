@@ -124,10 +124,10 @@ impl Downloader {
             let chapter_parts: Vec<&str> = chapter_number.split('.').collect();
             let num: i32 = chapter_parts[0][1..].parse().unwrap();
             let formatted_chapter = if chapter_parts.len() == 1 {
-                format!("{:04}_01", num)
+                format!("{:04}-01", num)
             } else {
                 let sub_num = chapter_parts[1].parse::<u32>().unwrap();
-                format!("{:04}_{:02}", num, sub_num)
+                format!("{:04}-{:02}", num, sub_num)
             };
 
             let formatted_chapter = format!("chapter_{}", formatted_chapter);

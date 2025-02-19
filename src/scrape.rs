@@ -70,7 +70,7 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
         .next()
         .ok_or_else(|| MgdlError::Scrape("Manga name not found".to_string()))?;
     let name = name_element.text().collect::<String>().trim().to_string();
-    let normalized_name = manga_url.split("/").last().unwrap().to_lowercase();
+    let normalized_name = manga_url.split("/").last().unwrap().to_lowercase().replace("-", "_");
 
     let hash = manga_url
         .split("/")
