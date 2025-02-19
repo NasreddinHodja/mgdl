@@ -3,19 +3,19 @@ use clap::{CommandFactory, Parser};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = "Download manga with gallery-dl")]
 pub struct Args {
-    // URL of manga to download
+    /// URL of manga to download
     #[arg(short, long)]
     pub download: Option<String>,
 
-    // URL of manga to add
+    /// URL of manga to add
     #[arg(short, long)]
     pub add: Option<String>,
 
-    // folder name of manga to update
+    /// folder name of manga to update
     #[arg(short, long)]
     pub update: Option<String>,
 
-    // Reset database
+    /// Reset local DB
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,
 }
