@@ -36,7 +36,7 @@ impl Downloader {
     pub fn download(&self, manga_url: &str) {
         let manga = self.add(manga_url);
 
-        println!("Downloading {manga.name}...")
+        println!("Downloading {manga.name}...");
         let manga_dir = self.manga_dir.join(&manga.normalized_name);
         self.download_with_gallery_dl(&manga, None);
 
