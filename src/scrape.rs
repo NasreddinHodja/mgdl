@@ -53,15 +53,15 @@ fn get_manga_chapters(manga_hash: &str, manga_id: &str) -> Result<Vec<Chapter>> 
 }
 
 pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
-    println!("Getting manga data from {manga_url}...");
-
     let response = get(manga_url)?;
+
     if response.status() != StatusCode::OK {
         return Err(MgdlError::Scrape(format!(
             "Could not access manga url: {}",
             manga_url
         )));
     }
+
     let manga_html = Html::parse_document(&response.text()?);
 
     let name_selector = create_selector("main > div > section > section > h1")?;
@@ -70,7 +70,12 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
         .next()
         .ok_or_else(|| MgdlError::Scrape("Manga name not found".to_string()))?;
     let name = name_element.text().collect::<String>().trim().to_string();
-    let normalized_name = manga_url.split("/").last().unwrap().to_lowercase().replace("-", "_");
+    let normalized_name = manga_url
+        .split("/")
+        .last()
+        .unwrap()
+        .to_lowercase()
+        .replace("-", "_");
 
     let hash = manga_url
         .split("/")
@@ -83,6 +88,7 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
 
     let mut authors = "".to_string();
     let mut status = "".to_string();
+
     let infos_selector =
         create_selector("main > div > section > section > section > ul.flex.flex-col.gap-4 > li")?;
     let info_elements = manga_html.select(&infos_selector);

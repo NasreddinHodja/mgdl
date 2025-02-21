@@ -16,6 +16,7 @@ impl Downloader {
         let db_path = db_dir.join(PathBuf::from("mgdl.db"));
         let db = db::Db::new(db_path);
         db.init();
+
         Self {
             db,
             manga_dir: manga_dir,
@@ -23,16 +24,22 @@ impl Downloader {
     }
 
     pub fn add(&self, manga_url: &str) -> Manga {
+        println!("Getting manga data from {manga_url}...");
         let (manga, chapters) = scrape::manga_from_url(manga_url).unwrap();
-        println!("Adding {} to DB...", manga.name);
+
+        println!("adding {} to db...", manga.name);
         let added_manga = self.db.add_manga(manga, &chapters);
+
         added_manga
     }
 
     pub fn download(&self, manga_url: &str) {
         let manga = self.add(manga_url);
+
+        println!("Downloading {manga.name}...")
         let manga_dir = self.manga_dir.join(&manga.normalized_name);
         self.download_with_gallery_dl(&manga, None);
+
         self.organize(&manga_dir);
     }
 
@@ -46,10 +53,7 @@ impl Downloader {
 
             Ok(manga)
         } else {
-            Err(MgdlError::Db(format!(
-                "couldn't find manga: {}",
-                manga_name
-            )))
+            Err(MgdlError::Db(format!("couldn't find manga: {}", manga_name)))
         }
     }
 
@@ -81,7 +85,6 @@ impl Downloader {
 
         let mut cmd = Command::new("gallery-dl");
         cmd.arg("-D").arg(&download_path);
-
         if let Some(skip) = skip_chaps {
             cmd.arg("--chapter-filter")
                 .arg(format!("{} < chapter", skip));

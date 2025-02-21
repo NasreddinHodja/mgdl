@@ -14,6 +14,7 @@ fn main() {
         dldr.download(&manga_url);
     } else if let Some(manga_name) = args.update {
         let result = dldr.update(&manga_name);
+
         if let Ok(manga) = result {
             println!("Updated {}", manga.name);
         } else {

@@ -101,7 +101,7 @@ impl Db {
             .execute("drop table if exists chapters", ())
             .unwrap();
         transaction
-            .execute(" drop table if exists mangas", ())
+            .execute("drop table if exists mangas", ())
             .unwrap();
 
         transaction.commit().unwrap();
@@ -178,7 +178,9 @@ impl Db {
 
     pub fn add_manga(&self, manga: Manga, chapters: &[Chapter]) -> Manga {
         let upserted_manga = self.upsert_manga(manga);
+
         self.upsert_chapters(chapters, &upserted_manga.hash);
+
         upserted_manga
     }
 
@@ -187,6 +189,7 @@ impl Db {
         let mut stmt = conn
             .prepare("select * from mangas where normalized_name = ?")
             .unwrap();
+
         let rows = stmt
             .query_map(params![normalized_name], |row| {
                 Ok(Manga {
@@ -207,21 +210,22 @@ impl Db {
         None
     }
 
-    pub fn query_mangas(&self, query: &str) {
-        let conn = Connection::open(&self.path).unwrap();
-        let mut stmt = conn.prepare(query).unwrap();
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(Manga {
-                    hash: row.get(1).unwrap(),
-                    name: row.get(2).unwrap(),
-                    normalized_name: row.get(3).unwrap(),
-                    authors: row.get(4).unwrap(),
-                    status: row.get(5).unwrap(),
-                })
-            })
-            .unwrap()
-            .collect::<Vec<_>>();
-        println!("result = {rows:#?}");
-    }
+    // pub fn query_mangas(&self, query: &str) {
+    //     let conn = Connection::open(&self.path).unwrap();
+    //     let mut stmt = conn.prepare(query).unwrap();
+
+    //     let rows = stmt
+    //         .query_map([], |row| {
+    //             Ok(Manga {
+    //                 hash: row.get(1).unwrap(),
+    //                 name: row.get(2).unwrap(),
+    //                 normalized_name: row.get(3).unwrap(),
+    //                 authors: row.get(4).unwrap(),
+    //                 status: row.get(5).unwrap(),
+    //             })
+    //         })
+    //         .unwrap()
+    //         .collect::<Vec<_>>();
+    //     println!("result = {rows:#?}");
+    // }
 }

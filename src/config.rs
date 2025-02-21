@@ -48,5 +48,6 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
             return home.join(path.strip_prefix("~").unwrap());
         }
     }
+
     path
 }
