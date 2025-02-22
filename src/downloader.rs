@@ -4,10 +4,10 @@ use crate::{
     db::{Chapter, Manga},
     scrape,
 };
-use rayon::prelude::*;
+use indicatif::ParallelProgressIterator;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs;
 use std::path::PathBuf;
-use std::time::Instant;
 
 pub struct Downloader {
     db: db::Db,
@@ -43,7 +43,7 @@ impl Downloader {
             .manga_dir
             .join(PathBuf::from(format!("{}", &manga.normalized_name)));
 
-        self.download_chapters(&manga_path, &chapters, None, true)?;
+        self.download_chapters(&manga_path, &chapters, None)?;
 
         Ok(())
     }
@@ -53,7 +53,6 @@ impl Downloader {
         manga_path: &PathBuf,
         chapters: &Vec<Chapter>,
         skip_chaps: Option<usize>,
-        parallel: bool
     ) -> Result<()> {
         fs::create_dir_all(&manga_path)?;
         for chapter in chapters {
@@ -76,18 +75,11 @@ impl Downloader {
 
             fs::create_dir_all(&chapter_path)?;
 
-            // println!("+ chapter {}", chapter.number);
-            if parallel {
-                pages.par_iter().try_for_each(|page| {
-                    // println!("  - page {} from {}", page.number, &page.url);
-                    scrape::download_page(&page.url, &chapter_path, page.number, 3)
-                })?;
-            } else {
-                for page in pages {
-                    scrape::download_page(&page.url, &chapter_path, page.number, 3)?;
-                }
-            }
-
+            println!("+ Chapter {}", chapter.number);
+            pages.par_iter().progress().try_for_each(|page| {
+                // println!("  - page {} from {}", page.number, &page.url);
+                scrape::download_page(&page.url, &chapter_path, page.number, 3)
+            })?;
         }
 
         Ok(())
@@ -101,7 +93,7 @@ impl Downloader {
             .manga_dir
             .join(PathBuf::from(format!("{}", &manga.normalized_name)));
 
-        self.download_chapters(&manga_path, &chapters, Some(skip_chaps), true)?;
+        self.download_chapters(&manga_path, &chapters, Some(skip_chaps))?;
 
         Ok(manga)
     }

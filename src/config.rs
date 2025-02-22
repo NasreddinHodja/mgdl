@@ -35,7 +35,9 @@ impl Config {
                 db_dir: expand_tilde(PathBuf::from(
                     &config_dir
                         .to_str()
-                        .ok_or(MgdlError::Config(format!("Could not find config directory")))?
+                        .ok_or(MgdlError::Config(format!(
+                            "Could not find config directory"
+                        )))?
                         .to_string(),
                 ))?,
             };
