@@ -36,7 +36,7 @@ impl Downloader {
 
     pub fn download_manga(&self, manga_url: &str) -> Result<()> {
         let (manga, chapters) = self.add(manga_url)?;
-        println!("Downloading_manga {}", &manga.name);
+        println!("Downloading manga {}", &manga.name);
         let manga_path = self
             .manga_dir
             .join(PathBuf::from(format!("{}", &manga.normalized_name)));
