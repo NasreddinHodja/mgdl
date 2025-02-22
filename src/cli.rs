@@ -15,7 +15,7 @@ pub struct Args {
 
     /// folder name of manga to update
     #[arg(short, long)]
-    pub update: Option<String>,
+    pub update: Option<Option<String>>,
 
     /// Reset local DB
     #[arg(short, long, default_value_t = false)]
@@ -23,7 +23,11 @@ pub struct Args {
 }
 
 pub fn parse() -> Args {
-    let args = Args::parse();
+    let mut args = Args::parse();
+
+    if let Some(None) = args.update {
+        args.update = Some(Some("all".to_string()));
+    }
 
     args
 }
