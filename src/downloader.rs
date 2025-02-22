@@ -67,7 +67,7 @@ impl Downloader {
             fs::create_dir_all(&chapter_path)?;
 
             for page in pages {
-                scrape::download_page(&page.url, &chapter_path, page.number)?;
+                scrape::download_page(&page.url, &chapter_path, page.number, 3)?;
             }
         }
 

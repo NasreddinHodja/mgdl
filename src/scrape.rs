@@ -1,7 +1,8 @@
 use reqwest::{blocking::get, StatusCode};
 use scraper::{Html, Selector};
-use std::{fs, path::PathBuf};
 use std::io::Write;
+use std::time::Duration;
+use std::{fs, path::PathBuf, thread::sleep};
 
 use crate::{
     db::{Chapter, Manga},
@@ -51,6 +52,7 @@ pub fn get_chapter_pages(chapter_hash: &str) -> Result<Vec<Page>> {
             .last()
             .ok_or(MgdlError::Scrape("Could not find page name.".to_string()))?
             .parse::<usize>()?;
+
         page_urls.push(Page { url, number });
     }
 
@@ -204,26 +206,44 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
     Ok((manga, chapters))
 }
 
-pub fn download_page(page_url: &str, chapter_path: &PathBuf, page_number: usize) -> Result<()> {
-    let response = get(page_url)?;
+pub fn download_page(
+    page_url: &str,
+    chapter_path: &PathBuf,
+    page_number: usize,
+    max_attempts: usize,
+) -> Result<()> {
+    let mut attempts = 0;
+    let mut delay = Duration::from_micros(100);
+    loop {
+        if attempts == max_attempts {
+            break;
+        }
 
-    if response.status() != StatusCode::OK {
-        return Err(MgdlError::Scrape(format!(
-            "Could not download page from {}",
-            page_url
-        )));
+        let response = get(page_url)?;
+
+        if response.status() != StatusCode::OK {
+            attempts += 1;
+            sleep(delay);
+            delay *= 2;
+            continue;
+        }
+
+        let bytes = response.bytes()?;
+
+        let file_ext = page_url.split('.').last().ok_or(MgdlError::Scrape(
+            "Could not find file extension".to_string(),
+        ))?;
+        let file_name = format!("{:03}.{}", page_number, file_ext);
+        let file_path = chapter_path.join(PathBuf::from(file_name));
+
+        let mut file = fs::File::create(&file_path)?;
+        file.write_all(&bytes)?;
+
+        return Ok(());
     }
 
-    let bytes = response.bytes()?;
-
-    let file_ext = page_url.split('.').last().ok_or(MgdlError::Scrape(
-        "Could not find file extension".to_string()
-    ))?;
-    let file_name = format!("{:03}.{}", page_number, file_ext);
-    let file_path = chapter_path.join(PathBuf::from(file_name));
-
-    let mut file = fs::File::create(&file_path)?;
-    file.write_all(&bytes)?;
-
-    Ok(())
+    return Err(MgdlError::Scrape(format!(
+        "Could not download page from {}",
+        page_url
+    )));
 }
