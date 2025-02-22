@@ -211,6 +211,23 @@ impl Db {
         )))
     }
 
+    pub fn get_manga_chapters(&self, manga: &Manga) -> Result<Vec<Chapter>> {
+        let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("select * from chapters where manga = ?")?;
+
+        let chapters = stmt
+            .query_map(params![manga.hash], |row| {
+                Ok(Chapter {
+                    hash: row.get(0)?,
+                    number: row.get(1)?,
+                    manga: row.get(2)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<Chapter>, _>>()?;
+
+        Ok(chapters)
+    }
+
     pub fn get_ongoing_manga(&self) -> Result<Vec<Manga>> {
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("select * from mangas where status = 'Ongoing'")?;
@@ -229,24 +246,4 @@ impl Db {
 
         Ok(mangas)
     }
-
-    // pub fn query_mangas(&self, query: &str) -> Result<()> {
-    //     let conn = Connection::open(&self.path)?;
-    //     let mut stmt = conn.prepare(query)?;
-
-    //     let rows = stmt
-    //         .query_map([], |row| {
-    //             Ok(Manga {
-    //                 hash: row.get(1)?,
-    //                 name: row.get(2)?,
-    //                 normalized_name: row.get(3)?,
-    //                 authors: row.get(4)?,
-    //                 status: row.get(5)?,
-    //             })
-    //         })?
-    //         .collect::<Vec<_>>();
-    //     println!("result = {rows:#?}");
-    //     conn.close();
-    //     Ok(())
-    // }
 }

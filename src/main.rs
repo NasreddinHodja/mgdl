@@ -19,14 +19,13 @@ fn run() -> Result<(), MgdlError> {
         }
     } else if let Some(manga_url) = args.add {
         match dldr.add(&manga_url) {
-            Ok(manga) => println!("Added manga {}", &manga.name),
+            Ok((manga, _chapters)) => println!("Added manga {}", &manga.name),
             Err(err) => eprintln!("{}", err),
         };
     } else if let Some(manga_url) = args.download {
-        match dldr.download(&manga_url) {
-            Ok(manga) => println!("Downloaded manga {}", &manga.name),
-            Err(err) => eprintln!("{}", err),
-        };
+        if let Err(err) = dldr.download_manga(&manga_url) {
+            eprintln!("{}", err);
+        }
     } else if let Some(manga) = args.update {
         if let Some(manga_name) = manga {
             match manga_name.as_str() {

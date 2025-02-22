@@ -3,7 +3,7 @@ use clap::{CommandFactory, Parser};
 use crate::MgdlError;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = "Download manga with gallery-dl")]
+#[command(author, version, about, long_about = "Download manga rust")]
 pub struct Args {
     /// URL of manga to download
     #[arg(short, long)]
