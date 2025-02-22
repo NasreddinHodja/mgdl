@@ -2,12 +2,16 @@ use rusqlite::{params, Connection};
 use std::fmt;
 use std::path::PathBuf;
 
+use crate::MgdlError;
+
 #[derive(Debug)]
 pub struct Chapter {
     pub hash: String,
     pub number: String,
     pub manga: String,
 }
+
+type Result<T> = std::result::Result<T, MgdlError>;
 
 impl Chapter {
     pub fn new(hash: &str, number: &str, manga: &str) -> Self {
@@ -59,13 +63,12 @@ impl Db {
         Self { path }
     }
 
-    pub fn create(&self) {
-        let mut conn = Connection::open(&self.path).unwrap();
-        let transaction = conn.transaction().unwrap();
+    pub fn create(&self) -> Result<()> {
+        let mut conn = Connection::open(&self.path)?;
+        let transaction = conn.transaction()?;
 
-        transaction
-            .execute(
-                "
+        transaction.execute(
+            "
                 create table if not exists chapters (
                     hash text not null,
                     number text not null,
@@ -73,12 +76,10 @@ impl Db {
                     foreign key (manga) references mangas(hash),
                     unique(number, manga)
                 )",
-                (),
-            )
-            .unwrap();
-        transaction
-            .execute(
-                "
+            (),
+        )?;
+        transaction.execute(
+            "
                 create table if not exists mangas (
                     hash text not null primary key,
                     name text not null unique,
@@ -86,54 +87,55 @@ impl Db {
                     authors text not null,
                     status text not null
                 );",
-                [],
-            )
-            .unwrap();
+            [],
+        )?;
 
-        transaction.commit().unwrap();
+        transaction.commit()?;
+
+        Ok(())
     }
 
-    pub fn drop(&self) {
-        let mut conn = Connection::open(&self.path).unwrap();
-        let transaction = conn.transaction().unwrap();
+    pub fn drop(&self) -> Result<()> {
+        let mut conn = Connection::open(&self.path)?;
+        let transaction = conn.transaction()?;
 
-        transaction
-            .execute("drop table if exists chapters", ())
-            .unwrap();
-        transaction
-            .execute("drop table if exists mangas", ())
-            .unwrap();
+        transaction.execute("drop table if exists chapters", ())?;
+        transaction.execute("drop table if exists mangas", ())?;
 
-        transaction.commit().unwrap();
+        transaction.commit()?;
+
+        Ok(())
     }
 
-    pub fn init(&self) {
-        self.create();
+    pub fn init(&self) -> Result<()> {
+        self.create()?;
+
+        Ok(())
     }
 
-    pub fn upsert_chapters(&self, chapters: &[Chapter], manga_hash: &str) {
-        let mut conn = Connection::open(&self.path).unwrap();
-        let transaction = conn.transaction().unwrap();
+    pub fn upsert_chapters(&self, chapters: &[Chapter], manga_hash: &str) -> Result<()> {
+        let mut conn = Connection::open(&self.path)?;
+        let transaction = conn.transaction()?;
 
         for chapter in chapters {
-            transaction
-                .execute(
-                    "
+            transaction.execute(
+                "
                     insert into chapters (hash, number, manga)
                     values (?, ?, ?)
                     on conflict(number, manga)
                     do update set hash = excluded.hash
                     ",
-                    (&chapter.hash, &chapter.number, manga_hash),
-                )
-                .unwrap();
+                (&chapter.hash, &chapter.number, manga_hash),
+            )?;
         }
 
-        transaction.commit().unwrap();
+        transaction.commit()?;
+
+        Ok(())
     }
 
-    pub fn upsert_manga(&self, manga: Manga) -> Manga {
-        let conn = Connection::open(&self.path).unwrap();
+    pub fn upsert_manga(&self, manga: Manga) -> Result<Manga> {
+        let conn = Connection::open(&self.path)?;
         let existing_manga = conn.query_row(
             "SELECT hash, name, normalized_name, authors, status
             FROM mangas
@@ -151,7 +153,7 @@ impl Db {
         );
 
         if let Ok(found_manga) = existing_manga {
-            return found_manga;
+            return Ok(found_manga);
         }
 
         conn.execute(
@@ -170,62 +172,61 @@ impl Db {
                 manga.authors.to_string(),
                 manga.status.to_string(),
             ),
-        )
-        .unwrap();
+        )?;
 
-        manga
+        Ok(manga)
     }
 
-    pub fn add_manga(&self, manga: Manga, chapters: &[Chapter]) -> Manga {
-        let upserted_manga = self.upsert_manga(manga);
+    pub fn add_manga(&self, manga: Manga, chapters: &[Chapter]) -> Result<Manga> {
+        let upserted_manga = self.upsert_manga(manga)?;
 
-        self.upsert_chapters(chapters, &upserted_manga.hash);
+        self.upsert_chapters(chapters, &upserted_manga.hash)?;
 
-        upserted_manga
+        Ok(upserted_manga)
     }
 
-    pub fn get_manga_by_normalized_name(&self, normalized_name: &str) -> Option<Manga> {
-        let conn = Connection::open(&self.path).unwrap();
-        let mut stmt = conn
-            .prepare("select * from mangas where normalized_name = ?")
-            .unwrap();
+    pub fn get_manga_by_normalized_name(&self, normalized_name: &str) -> Result<Manga> {
+        let conn = Connection::open(&self.path)?;
+        let mut stmt = conn.prepare("select * from mangas where normalized_name = ?")?;
 
         let rows = stmt
             .query_map(params![normalized_name], |row| {
                 Ok(Manga {
-                    hash: row.get(0).unwrap(),
-                    name: row.get(1).unwrap(),
-                    normalized_name: row.get(2).unwrap(),
-                    authors: row.get(3).unwrap(),
-                    status: row.get(4).unwrap(),
+                    hash: row.get(0)?,
+                    name: row.get(1)?,
+                    normalized_name: row.get(2)?,
+                    authors: row.get(3)?,
+                    status: row.get(4)?,
                 })
-            })
-            .unwrap()
+            })?
             .collect::<Vec<_>>();
 
         for manga in rows {
-            return Some(manga.unwrap());
+            return Ok(manga?);
         }
 
-        None
+        Err(MgdlError::Db(format!(
+            "Cound't get manga by normalized_name = '{}'",
+            normalized_name
+        )))
     }
 
-    // pub fn query_mangas(&self, query: &str) {
-    //     let conn = Connection::open(&self.path).unwrap();
-    //     let mut stmt = conn.prepare(query).unwrap();
+    // pub fn query_mangas(&self, query: &str) -> Result<()> {
+    //     let conn = Connection::open(&self.path)?;
+    //     let mut stmt = conn.prepare(query)?;
 
     //     let rows = stmt
     //         .query_map([], |row| {
     //             Ok(Manga {
-    //                 hash: row.get(1).unwrap(),
-    //                 name: row.get(2).unwrap(),
-    //                 normalized_name: row.get(3).unwrap(),
-    //                 authors: row.get(4).unwrap(),
-    //                 status: row.get(5).unwrap(),
+    //                 hash: row.get(1)?,
+    //                 name: row.get(2)?,
+    //                 normalized_name: row.get(3)?,
+    //                 authors: row.get(4)?,
+    //                 status: row.get(5)?,
     //             })
-    //         })
-    //         .unwrap()
+    //         })?
     //         .collect::<Vec<_>>();
     //     println!("result = {rows:#?}");
+    //     Ok(())
     // }
 }

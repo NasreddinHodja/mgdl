@@ -25,23 +25,29 @@ fn get_manga_chapters(manga_hash: &str, manga_id: &str) -> Result<Vec<Chapter>> 
     let manga_html = Html::parse_document(&response.text()?);
 
     let chapter_selector = create_selector("div > a")?;
+
     let chapter_elements = manga_html.select(&chapter_selector);
 
     for chapter_element in chapter_elements {
-        let url = chapter_element.attr("href").unwrap();
-        let hash = url.split("/").last().unwrap();
+        let url = chapter_element
+            .attr("href")
+            .ok_or(MgdlError::Scrape("Could not find chapter URL".to_string()))?;
+        let hash = url
+            .split("/")
+            .last()
+            .ok_or(MgdlError::Scrape("Could not find chapter hash".to_string()))?;
 
         let number_selector = create_selector("span > span")?;
         let number = chapter_element
             .select(&number_selector)
             .next()
-            .ok_or_else(|| MgdlError::Scrape("Manga name not found".to_string()))?
+            .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
             .text()
             .collect::<String>()
             .trim()
             .split(" ")
             .last()
-            .unwrap()
+            .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
             .to_string()
             .replace(".", "-");
 
@@ -68,12 +74,12 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
     let name_element = manga_html
         .select(&name_selector)
         .next()
-        .ok_or_else(|| MgdlError::Scrape("Manga name not found".to_string()))?;
+        .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?;
     let name = name_element.text().collect::<String>().trim().to_string();
     let normalized_name = manga_url
         .split("/")
         .last()
-        .unwrap()
+        .ok_or(MgdlError::Scrape("Couldn't find manga's name".to_string()))?
         .to_lowercase()
         .replace("-", "_");
 
@@ -83,7 +89,7 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
         .into_iter()
         .rev()
         .nth(1)
-        .unwrap()
+        .ok_or(MgdlError::Scrape("Couldn't find manga's hash".to_string()))?
         .to_string();
 
     let mut authors = "".to_string();
@@ -98,7 +104,7 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
         let info_label = info_element
             .select(&strong_selector)
             .next()
-            .ok_or_else(|| MgdlError::Scrape("Manga name not found".to_string()))?
+            .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
             .text()
             .collect::<String>()
             .trim()
@@ -121,7 +127,7 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
                 status = info_element
                     .select(&status_selector)
                     .next()
-                    .ok_or_else(|| MgdlError::Scrape("Manga name not found".to_string()))?
+                    .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
                     .text()
                     .collect::<String>()
                     .trim()

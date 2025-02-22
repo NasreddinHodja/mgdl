@@ -1,5 +1,7 @@
 use clap::{CommandFactory, Parser};
 
+use crate::MgdlError;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = "Download manga with gallery-dl")]
 pub struct Args {
@@ -26,6 +28,7 @@ pub fn parse() -> Args {
     args
 }
 
-pub fn print_help() {
-    Args::command().print_help().unwrap();
+pub fn print_help() -> Result<(), MgdlError> {
+    Args::command().print_help()?;
+    Ok(())
 }

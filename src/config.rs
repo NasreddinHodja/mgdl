@@ -31,8 +31,13 @@ impl Config {
             let config_string = fs::read_to_string(&config_file)?;
             let config: Config = toml::from_str(&config_string)?;
             let mgdl_config = MgdlConfig {
-                manga_dir: expand_tilde(PathBuf::from(&config.manga_dir)),
-                db_dir: expand_tilde(PathBuf::from(&config_dir.to_str().unwrap().to_string())),
+                manga_dir: expand_tilde(PathBuf::from(&config.manga_dir))?,
+                db_dir: expand_tilde(PathBuf::from(
+                    &config_dir
+                        .to_str()
+                        .ok_or(MgdlError::Config(format!("Coudn't find config directory")))?
+                        .to_string(),
+                ))?,
             };
 
             Ok(mgdl_config)
@@ -42,12 +47,15 @@ impl Config {
     }
 }
 
-fn expand_tilde(path: PathBuf) -> PathBuf {
+fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
     if let Some(home) = home_dir() {
         if path.starts_with("~") {
-            return home.join(path.strip_prefix("~").unwrap());
+            return Ok(home
+                .join(path.strip_prefix("~").map_err(|err| {
+                    MgdlError::Config(format!("Could not expand path: {}", err))
+                })?));
         }
     }
 
-    path
+    Ok(path)
 }

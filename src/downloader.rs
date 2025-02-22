@@ -12,55 +12,53 @@ pub struct Downloader {
 type Result<T> = std::result::Result<T, MgdlError>;
 
 impl Downloader {
-    pub fn new(manga_dir: PathBuf, db_dir: PathBuf) -> Self {
+    pub fn new(manga_dir: PathBuf, db_dir: PathBuf) -> Result<Self> {
         let db_path = db_dir.join(PathBuf::from("mgdl.db"));
         let db = db::Db::new(db_path);
-        db.init();
+        db.init()?;
 
-        Self {
+        Ok(Self {
             db,
             manga_dir: manga_dir,
-        }
+        })
     }
 
-    pub fn add(&self, manga_url: &str) -> Manga {
+    pub fn add(&self, manga_url: &str) -> Result<Manga> {
         println!("Getting manga data from {manga_url}...");
-        let (manga, chapters) = scrape::manga_from_url(manga_url).unwrap();
+        let (manga, chapters) = scrape::manga_from_url(manga_url)?;
 
         println!("adding {} to db...", manga.name);
-        let added_manga = self.db.add_manga(manga, &chapters);
+        let added_manga = self.db.add_manga(manga, &chapters)?;
 
-        added_manga
+        Ok(added_manga)
     }
 
-    pub fn download(&self, manga_url: &str) {
-        let manga = self.add(manga_url);
+    pub fn download(&self, manga_url: &str) -> Result<Manga> {
+        let manga = self.add(manga_url)?;
 
         println!("Downloading {}...", &manga.name);
         let manga_dir = self.manga_dir.join(&manga.normalized_name);
-        self.download_with_gallery_dl(&manga, None);
+        self.download_with_gallery_dl(&manga, None)?;
 
-        self.organize(&manga_dir);
+        self.organize(&manga_dir)?;
+
+        Ok(manga)
     }
 
     pub fn update(&self, manga_name: &str) -> Result<Manga> {
-        if let Some(manga) = self.db.get_manga_by_normalized_name(manga_name) {
-            let skip_chaps = self.skip_chaps(&manga);
+        let manga = self.db.get_manga_by_normalized_name(manga_name)?;
+        let skip_chaps = self.skip_chaps(&manga)?;
 
-            self.download_with_gallery_dl(&manga, Some(skip_chaps));
+        self.download_with_gallery_dl(&manga, Some(skip_chaps))?;
 
-            self.organize(&self.manga_dir.join(&manga.normalized_name));
+        self.organize(&self.manga_dir.join(&manga.normalized_name))?;
 
-            Ok(manga)
-        } else {
-            Err(MgdlError::Db(format!("couldn't find manga: {}", manga_name)))
-        }
+        Ok(manga)
     }
 
-    pub fn skip_chaps(&self, manga: &Manga) -> usize {
+    pub fn skip_chaps(&self, manga: &Manga) -> Result<usize> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
-        let mut chaps: Vec<usize> = fs::read_dir(&manga_path)
-            .unwrap()
+        let mut chaps: Vec<usize> = fs::read_dir(&manga_path)?
             .filter_map(|entry| entry.ok())
             .filter_map(|entry| entry.file_name().into_string().ok())
             .filter(|name| name.contains("chapter"))
@@ -76,10 +74,12 @@ impl Downloader {
             chaps.push(0);
         }
 
-        *(chaps.iter().max().unwrap())
+        Ok(*(chaps.iter().max().ok_or(MgdlError::Downloader(
+            "Couldn't find manga's name".to_string(),
+        ))?))
     }
 
-    pub fn download_with_gallery_dl(&self, manga: &Manga, skip_chaps: Option<usize>) {
+    pub fn download_with_gallery_dl(&self, manga: &Manga, skip_chaps: Option<usize>) -> Result<()> {
         let download_path = self.manga_dir.join(&manga.normalized_name);
         let download_url = format!("https://weebcentral.com/series/{}/", &manga.hash);
 
@@ -94,18 +94,22 @@ impl Downloader {
             .arg(&download_url)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .spawn()
-            .unwrap();
+            .spawn()?;
 
-        let status = child.wait().unwrap();
-        if !status.success() {
-            panic!("gallery-dl Error: {:?}", status.code());
+        let status = child.wait()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(MgdlError::Downloader(format!(
+                "Downloader failed with status = {}",
+                status
+            )))
         }
     }
 
-    pub fn organize(&self, dir: &PathBuf) {
-        for entry in fs::read_dir(&dir).unwrap() {
-            let entry = entry.unwrap();
+    pub fn organize(&self, dir: &PathBuf) -> Result<()> {
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
             let file_path = entry.path();
             let file_name = entry.file_name();
             let file_name = file_name.to_string_lossy();
@@ -125,25 +129,30 @@ impl Downloader {
             let page_number = parts[2];
 
             let chapter_parts: Vec<&str> = chapter_number.split('.').collect();
-            let num: i32 = chapter_parts[0][1..].parse().unwrap();
+            let num: i32 = chapter_parts[0][1..].parse().map_err(|err| {
+                MgdlError::Downloader(format!("Cound't parse chapter directory name: {}", err))
+            })?;
             let formatted_chapter = if chapter_parts.len() == 1 {
                 format!("{:04}-01", num)
             } else {
-                let sub_num = chapter_parts[1].parse::<u32>().unwrap();
+                let sub_num = chapter_parts[1].parse::<u32>()?;
                 format!("{:04}-{:02}", num, sub_num)
             };
 
             let formatted_chapter = format!("chapter_{}", formatted_chapter);
 
             let chapter_dir = dir.join(&formatted_chapter);
-            fs::create_dir_all(&chapter_dir).unwrap();
+            fs::create_dir_all(&chapter_dir)?;
 
             let new_path = chapter_dir.join(format!("{}.jpg", page_number));
-            fs::rename(&file_path, &new_path).unwrap();
+            fs::rename(&file_path, &new_path)?;
         }
+
+        Ok(())
     }
 
-    pub fn reset_db(&self) {
-        self.db.drop();
+    pub fn reset_db(&self) -> Result<()> {
+        self.db.drop()?;
+        Ok(())
     }
 }
