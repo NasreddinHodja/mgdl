@@ -69,17 +69,6 @@ impl Db {
 
         transaction.execute(
             "
-                create table if not exists chapters (
-                    hash text not null,
-                    number text not null,
-                    manga text,
-                    foreign key (manga) references mangas(hash),
-                    unique(number, manga)
-                )",
-            (),
-        )?;
-        transaction.execute(
-            "
                 create table if not exists mangas (
                     hash text not null primary key,
                     name text not null unique,
@@ -99,7 +88,6 @@ impl Db {
         let mut conn = Connection::open(&self.path)?;
         let transaction = conn.transaction()?;
 
-        transaction.execute("drop table if exists chapters", ())?;
         transaction.execute("drop table if exists mangas", ())?;
 
         transaction.commit()?;
@@ -109,27 +97,6 @@ impl Db {
 
     pub fn init(&self) -> Result<()> {
         self.create()?;
-
-        Ok(())
-    }
-
-    pub fn upsert_chapters(&self, chapters: &[Chapter], manga_hash: &str) -> Result<()> {
-        let mut conn = Connection::open(&self.path)?;
-        let transaction = conn.transaction()?;
-
-        for chapter in chapters {
-            transaction.execute(
-                "
-                    insert into chapters (hash, number, manga)
-                    values (?, ?, ?)
-                    on conflict(number, manga)
-                    do update set hash = excluded.hash
-                    ",
-                (&chapter.hash, &chapter.number, manga_hash),
-            )?;
-        }
-
-        transaction.commit()?;
 
         Ok(())
     }
@@ -177,10 +144,8 @@ impl Db {
         Ok(manga)
     }
 
-    pub fn add_manga(&self, manga: Manga, chapters: &[Chapter]) -> Result<Manga> {
+    pub fn add_manga(&self, manga: Manga) -> Result<Manga> {
         let upserted_manga = self.upsert_manga(manga)?;
-
-        self.upsert_chapters(chapters, &upserted_manga.hash)?;
 
         Ok(upserted_manga)
     }
@@ -209,23 +174,6 @@ impl Db {
             "Cound't get manga by normalized_name = '{}'",
             normalized_name
         )))
-    }
-
-    pub fn get_manga_chapters(&self, manga: &Manga) -> Result<Vec<Chapter>> {
-        let conn = Connection::open(&self.path)?;
-        let mut stmt = conn.prepare("select * from chapters where manga = ?")?;
-
-        let chapters = stmt
-            .query_map(params![manga.hash], |row| {
-                Ok(Chapter {
-                    hash: row.get(0)?,
-                    number: row.get(1)?,
-                    manga: row.get(2)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<Chapter>, _>>()?;
-
-        Ok(chapters)
     }
 
     pub fn get_ongoing_manga(&self) -> Result<Vec<Manga>> {

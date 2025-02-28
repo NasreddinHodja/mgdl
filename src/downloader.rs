@@ -31,12 +31,12 @@ impl Downloader {
     pub fn add(&self, manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
         let (manga, chapters) = scrape::manga_from_url(manga_url)?;
 
-        let added_manga = self.db.add_manga(manga, &chapters)?;
+        let added_manga = self.db.add_manga(manga)?;
 
         Ok((added_manga, chapters))
     }
 
-    pub fn download_manga(&self, manga_url: &str) -> Result<()> {
+    pub fn download_manga(&self, manga_url: &str) -> Result<Manga> {
         let (manga, chapters) = self.add(manga_url)?;
         println!("Downloading manga {}", &manga.name);
         let manga_path = self
@@ -45,7 +45,7 @@ impl Downloader {
 
         self.download_chapters(&manga_path, &chapters, None)?;
 
-        Ok(())
+        Ok(manga)
     }
 
     pub fn download_chapters(
@@ -66,7 +66,6 @@ impl Downloader {
                 .parse::<usize>()?;
 
             if let Some(skip) = skip_chaps {
-                println!("{chapter_number:#?}");
                 if chapter_number <= skip {
                     continue;
                 }
@@ -91,21 +90,19 @@ impl Downloader {
         let manga = self.db.get_manga_by_normalized_name(manga_name)?;
         let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
         let (new_manga, chapters) = scrape::manga_from_url(&manga_url)?;
-        println!("manga = {new_manga:#?}");
-        println!("chapters = {chapters:#?}");
-        let skip_chaps = self.skip_chaps(&manga)?;
-        println!("skip_chaps = {skip_chaps:#?}");
+        let skip_chaps = self.skip_chaps(&new_manga)?;
         let manga_path = self
             .manga_dir
-            .join(PathBuf::from(format!("{}", &manga.normalized_name)));
+            .join(PathBuf::from(format!("{}", &new_manga.normalized_name)));
 
         self.download_chapters(&manga_path, &chapters, Some(skip_chaps))?;
 
-        Ok(manga)
+        Ok(new_manga)
     }
 
     pub fn update_all(&self) -> Result<()> {
         for manga in self.db.get_ongoing_manga()? {
+            println!("Trying to update {}", &manga.name);
             self.update(&manga.normalized_name)?;
         }
 
@@ -114,7 +111,6 @@ impl Downloader {
 
     pub fn skip_chaps(&self, manga: &Manga) -> Result<usize> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
-        println!("manga_path = {manga_path:#?}");
         let mut chaps: Vec<usize> = fs::read_dir(&manga_path)?
             .filter_map(|entry| entry.ok())
             .filter_map(|entry| entry.file_name().into_string().ok())

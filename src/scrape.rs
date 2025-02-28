@@ -1,9 +1,9 @@
+use regex::Regex;
 use reqwest::{blocking::get, StatusCode};
 use scraper::{Html, Selector};
 use std::io::Write;
 use std::time::Duration;
 use std::{fs, path::PathBuf, thread::sleep};
-use regex::Regex;
 
 use crate::{
     db::{Chapter, Manga},
@@ -142,7 +142,10 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
     let name = name_element.text().collect::<String>().trim().to_string();
     let normalized_name = normalize(&name);
 
-    let hash = extract_hash(&manga_url).ok_or(MgdlError::Scrape(format!("Could not parse manga hash from {}", &manga_url)))?;
+    let hash = extract_hash(&manga_url).ok_or(MgdlError::Scrape(format!(
+        "Could not parse manga hash from {}",
+        &manga_url
+    )))?;
 
     let mut authors = "".to_string();
     let mut status = "".to_string();
@@ -239,10 +242,22 @@ pub fn download_page(
 
 fn normalize(s: &str) -> String {
     let replacements = [
-        (r"[áàâãä]", "a"), (r"[éèêë]", "e"), (r"[íìîï]", "i"), (r"[óòôõö]", "o"),
-        (r"[úùûü]", "u"), (r"[ç]", "c"), (r"[ñ]", "n"), (r"[ýÿ]", "y"),
-        (r"[ÁÀÂÃÄ]", "A"), (r"[ÉÈÊË]", "E"), (r"[ÍÌÎÏ]", "I"), (r"[ÓÒÔÕÖ]", "O"),
-        (r"[ÚÙÛÜ]", "U"), (r"[Ç]", "C"), (r"[Ñ]", "N"), (r"[Ý]", "Y")
+        (r"[áàâãä]", "a"),
+        (r"[éèêë]", "e"),
+        (r"[íìîï]", "i"),
+        (r"[óòôõö]", "o"),
+        (r"[úùûü]", "u"),
+        (r"[ç]", "c"),
+        (r"[ñ]", "n"),
+        (r"[ýÿ]", "y"),
+        (r"[ÁÀÂÃÄ]", "A"),
+        (r"[ÉÈÊË]", "E"),
+        (r"[ÍÌÎÏ]", "I"),
+        (r"[ÓÒÔÕÖ]", "O"),
+        (r"[ÚÙÛÜ]", "U"),
+        (r"[Ç]", "C"),
+        (r"[Ñ]", "N"),
+        (r"[Ý]", "Y"),
     ];
 
     let mut s = s.to_string();
