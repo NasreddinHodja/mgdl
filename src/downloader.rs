@@ -64,11 +64,14 @@ impl Downloader {
                     "Could not find manga's name".to_string(),
                 ))?
                 .parse::<usize>()?;
+
             if let Some(skip) = skip_chaps {
+                println!("{chapter_number:#?}");
                 if chapter_number <= skip {
                     continue;
                 }
             }
+
             let pages = scrape::get_chapter_pages(&chapter.hash)?;
             let chapter_path =
                 manga_path.join(PathBuf::from(format!("chapter_{}", &chapter.number)));
@@ -77,7 +80,6 @@ impl Downloader {
 
             println!("+ Chapter {}", chapter.number);
             pages.par_iter().progress().try_for_each(|page| {
-                // println!("  - page {} from {}", page.number, &page.url);
                 scrape::download_page(&page.url, &chapter_path, page.number, 3)
             })?;
         }
@@ -87,8 +89,12 @@ impl Downloader {
 
     pub fn update(&self, manga_name: &str) -> Result<Manga> {
         let manga = self.db.get_manga_by_normalized_name(manga_name)?;
-        let chapters = self.db.get_manga_chapters(&manga)?;
+        let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
+        let (new_manga, chapters) = scrape::manga_from_url(&manga_url)?;
+        println!("manga = {new_manga:#?}");
+        println!("chapters = {chapters:#?}");
         let skip_chaps = self.skip_chaps(&manga)?;
+        println!("skip_chaps = {skip_chaps:#?}");
         let manga_path = self
             .manga_dir
             .join(PathBuf::from(format!("{}", &manga.normalized_name)));
@@ -100,7 +106,6 @@ impl Downloader {
 
     pub fn update_all(&self) -> Result<()> {
         for manga in self.db.get_ongoing_manga()? {
-            println!("Trying to update {}", &manga.name);
             self.update(&manga.normalized_name)?;
         }
 
@@ -109,6 +114,7 @@ impl Downloader {
 
     pub fn skip_chaps(&self, manga: &Manga) -> Result<usize> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
+        println!("manga_path = {manga_path:#?}");
         let mut chaps: Vec<usize> = fs::read_dir(&manga_path)?
             .filter_map(|entry| entry.ok())
             .filter_map(|entry| entry.file_name().into_string().ok())
