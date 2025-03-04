@@ -1,20 +1,16 @@
 use crate::MgdlError;
-use crate::{
-    db,
-    db::{Chapter, Manga},
-    scrape,
-};
+use crate::{db, scrape, Chapter, Manga};
 use indicatif::ParallelProgressIterator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs;
 use std::path::PathBuf;
 
+type Result<T> = std::result::Result<T, MgdlError>;
+
 pub struct Downloader {
     db: db::Db,
     manga_dir: PathBuf,
 }
-
-type Result<T> = std::result::Result<T, MgdlError>;
 
 impl Downloader {
     pub fn new(manga_dir: PathBuf, db_dir: PathBuf) -> Result<Self> {

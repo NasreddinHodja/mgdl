@@ -6,7 +6,7 @@ use std::time::Duration;
 use std::{fs, path::PathBuf, thread::sleep};
 
 use crate::{
-    db::{Chapter, Manga},
+    models::{Chapter, Manga},
     MgdlError,
 };
 
