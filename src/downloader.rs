@@ -69,7 +69,7 @@ impl Downloader {
                 }
             }
 
-            let pages = scrape::get_chapter_pages(&chapter.hash).await?;
+            let pages = scrape::get_chapter_pages(&chapter.hash, 20).await?;
             let chapter_path =
                 manga_path.join(PathBuf::from(format!("chapter_{}", &chapter.number)));
 
@@ -82,7 +82,7 @@ impl Downloader {
                 let page_url = page.url.clone();
                 let page_number = page.number.clone();
                 let handle = tokio::spawn(async move {
-                    scrape::download_page(&page_url, &chapter_path, page_number, 3).await.ok();
+                    scrape::download_page(&page_url, &chapter_path, page_number, 20).await.ok();
                 });
                 tasks.push(handle);
             }
