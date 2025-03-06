@@ -1,5 +1,5 @@
 use regex::Regex;
-use reqwest::{blocking::get, StatusCode};
+use reqwest::{get, StatusCode};
 use scraper::{Html, Selector};
 use std::io::Write;
 use std::time::Duration;
@@ -22,11 +22,11 @@ fn create_selector(selectors: &str) -> Result<Selector> {
     Selector::parse(selectors).map_err(|err| MgdlError::Scrape(err.to_string()))
 }
 
-pub fn get_chapter_pages(chapter_hash: &str) -> Result<Vec<Page>> {
+pub async fn get_chapter_pages(chapter_hash: &str) -> Result<Vec<Page>> {
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
     let mut page_urls: Vec<Page> = vec![];
 
-    let response = get(url)?;
+    let response = get(url).await?;
     if response.status() != StatusCode::OK {
         return Err(MgdlError::Scrape(format!(
             "Could not get chapter {} full page list",
@@ -34,7 +34,7 @@ pub fn get_chapter_pages(chapter_hash: &str) -> Result<Vec<Page>> {
         )));
     }
 
-    let html = Html::parse_document(&response.text()?);
+    let html = Html::parse_document(&response.text().await?);
 
     let pages_selector = create_selector("img")?;
 
@@ -60,17 +60,17 @@ pub fn get_chapter_pages(chapter_hash: &str) -> Result<Vec<Page>> {
     Ok(page_urls)
 }
 
-fn get_manga_chapters(manga_hash: &str, manga_id: &str) -> Result<Vec<Chapter>> {
+async fn get_manga_chapters(manga_hash: &str, manga_id: &str) -> Result<Vec<Chapter>> {
     let mut chapters: Vec<Chapter> = vec![];
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
 
-    let response = get(url)?;
+    let response = get(url).await?;
     if response.status() != StatusCode::OK {
         return Err(MgdlError::Scrape(
             "Could not get manga full chapter list".to_string(),
         ));
     }
-    let manga_html = Html::parse_document(&response.text()?);
+    let manga_html = Html::parse_document(&response.text().await?);
 
     let chapter_selector = create_selector("div > a")?;
     let chapter_elements = manga_html.select(&chapter_selector);
@@ -122,8 +122,8 @@ fn get_manga_chapters(manga_hash: &str, manga_id: &str) -> Result<Vec<Chapter>> 
     Ok(chapters)
 }
 
-pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
-    let response = get(manga_url)?;
+pub async fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
+    let response = get(manga_url).await?;
 
     if response.status() != StatusCode::OK {
         return Err(MgdlError::Scrape(format!(
@@ -132,7 +132,7 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
         )));
     }
 
-    let manga_html = Html::parse_document(&response.text()?);
+    let manga_html = Html::parse_document(&response.text().await?);
 
     let name_selector = create_selector("main > div > section > section > h1")?;
     let name_element = manga_html
@@ -193,12 +193,12 @@ pub fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
     }
 
     let manga = Manga::new(&hash, &name, &normalized_name, &authors, &status);
-    let chapters = get_manga_chapters(&hash, &manga.hash)?;
+    let chapters = get_manga_chapters(&hash, &manga.hash).await?;
 
     Ok((manga, chapters))
 }
 
-pub fn download_page(
+pub async fn download_page(
     page_url: &str,
     chapter_path: &PathBuf,
     page_number: usize,
@@ -211,7 +211,7 @@ pub fn download_page(
             break;
         }
 
-        let response = get(page_url)?;
+        let response = get(page_url).await?;
 
         if response.status() != StatusCode::OK {
             attempts += 1;
@@ -220,7 +220,7 @@ pub fn download_page(
             continue;
         }
 
-        let bytes = response.bytes()?;
+        let bytes = response.bytes().await?;
 
         let file_ext = page_url.split('.').last().ok_or(MgdlError::Scrape(
             "Could not find file extension".to_string(),

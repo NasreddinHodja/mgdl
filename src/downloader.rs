@@ -1,7 +1,6 @@
 use crate::MgdlError;
+use tokio::{self, task};
 use crate::{db, scrape, Chapter, Manga};
-use indicatif::ParallelProgressIterator;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs;
 use std::path::PathBuf;
 
@@ -24,33 +23,34 @@ impl Downloader {
         })
     }
 
-    pub fn add(&self, manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
-        let (manga, chapters) = scrape::manga_from_url(manga_url)?;
+    pub async fn add(&self, manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
+        let (manga, chapters) = scrape::manga_from_url(manga_url).await?;
 
         let added_manga = self.db.add_manga(manga)?;
 
         Ok((added_manga, chapters))
     }
 
-    pub fn download_manga(&self, manga_url: &str) -> Result<Manga> {
-        let (manga, chapters) = self.add(manga_url)?;
+    pub async fn download_manga(&self, manga_url: &str) -> Result<Manga> {
+        let (manga, chapters) = self.add(manga_url).await?;
         println!("Downloading manga {}", &manga.name);
         let manga_path = self
             .manga_dir
             .join(PathBuf::from(format!("{}", &manga.normalized_name)));
 
-        self.download_chapters(&manga_path, &chapters, None)?;
+        self.download_chapters(&manga_path, &chapters, None).await?;
 
         Ok(manga)
     }
 
-    pub fn download_chapters(
+    pub async fn download_chapters(
         &self,
         manga_path: &PathBuf,
         chapters: &Vec<Chapter>,
         skip_chaps: Option<usize>,
     ) -> Result<()> {
         fs::create_dir_all(&manga_path)?;
+
         for chapter in chapters {
             let chapter_number = chapter
                 .number
@@ -67,39 +67,44 @@ impl Downloader {
                 }
             }
 
-            let pages = scrape::get_chapter_pages(&chapter.hash)?;
+            let pages = scrape::get_chapter_pages(&chapter.hash).await?;
             let chapter_path =
                 manga_path.join(PathBuf::from(format!("chapter_{}", &chapter.number)));
 
             fs::create_dir_all(&chapter_path)?;
 
+
             println!("+ Chapter {}", chapter.number);
-            pages.par_iter().progress().try_for_each(|page| {
-                scrape::download_page(&page.url, &chapter_path, page.number, 3)
-            })?;
+            for page in pages {
+                let chapter_path = chapter_path.clone();
+                tokio::spawn(async move {
+                    scrape::download_page(&page.url, &chapter_path, page.number, 3).await.ok()
+                });
+            }
         }
 
+        task::yield_now().await;
         Ok(())
     }
 
-    pub fn update(&self, manga_name: &str) -> Result<Manga> {
+    pub async fn update(&self, manga_name: &str) -> Result<Manga> {
         let manga = self.db.get_manga_by_normalized_name(manga_name)?;
         let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
-        let (new_manga, chapters) = scrape::manga_from_url(&manga_url)?;
+        let (new_manga, chapters) = scrape::manga_from_url(&manga_url).await?;
         let skip_chaps = self.skip_chaps(&new_manga)?;
         let manga_path = self
             .manga_dir
             .join(PathBuf::from(format!("{}", &new_manga.normalized_name)));
 
-        self.download_chapters(&manga_path, &chapters, Some(skip_chaps))?;
+        self.download_chapters(&manga_path, &chapters, Some(skip_chaps)).await?;
 
         Ok(new_manga)
     }
 
-    pub fn update_all(&self) -> Result<()> {
+    pub async fn update_all(&self) -> Result<()> {
         for manga in self.db.get_ongoing_manga()? {
             println!("Trying to update {}", &manga.name);
-            self.update(&manga.normalized_name)?;
+            self.update(&manga.normalized_name).await?;
         }
 
         Ok(())
