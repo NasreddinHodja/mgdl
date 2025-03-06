@@ -11,6 +11,7 @@ pub enum MgdlError {
     Db(String),
     Scrape(String),
     Downloader(String),
+    Join(tokio::task::JoinError),
 }
 
 impl fmt::Display for MgdlError {
@@ -21,10 +22,11 @@ impl fmt::Display for MgdlError {
             MgdlError::Reqwest(err) => write!(f, "Reqwest error: {}", err),
             MgdlError::Rusqlite(err) => write!(f, "Reqwest error: {}", err),
             MgdlError::Parse(err) => write!(f, "Parse error: {}", err),
-            MgdlError::Config(msg) => write!(f, "Config Error: {}", msg),
-            MgdlError::Scrape(msg) => write!(f, "Scrape Error: {}", msg),
-            MgdlError::Db(msg) => write!(f, "DB Error: {}", msg),
+            MgdlError::Config(msg) => write!(f, "Config error: {}", msg),
+            MgdlError::Scrape(msg) => write!(f, "Scrape error: {}", msg),
+            MgdlError::Db(msg) => write!(f, "DB error: {}", msg),
             MgdlError::Downloader(msg) => write!(f, "Downloader Error: {}", msg),
+            MgdlError::Join(err) => write!(f, "Join error: {}", err),
         }
     }
 }
@@ -58,5 +60,11 @@ impl From<rusqlite::Error> for MgdlError {
 impl From<std::num::ParseIntError> for MgdlError {
     fn from(err: std::num::ParseIntError) -> Self {
         MgdlError::Parse(err)
+    }
+}
+
+impl From<tokio::task::JoinError> for MgdlError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        MgdlError::Join(err)
     }
 }

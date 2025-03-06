@@ -1,5 +1,5 @@
 use crate::MgdlError;
-use tokio::{self, task};
+use tokio;
 use crate::{db, scrape, Chapter, Manga};
 use std::fs;
 use std::path::PathBuf;
@@ -51,6 +51,8 @@ impl Downloader {
     ) -> Result<()> {
         fs::create_dir_all(&manga_path)?;
 
+        let mut tasks = vec![];
+
         for chapter in chapters {
             let chapter_number = chapter
                 .number
@@ -77,13 +79,18 @@ impl Downloader {
             println!("+ Chapter {}", chapter.number);
             for page in pages {
                 let chapter_path = chapter_path.clone();
-                tokio::spawn(async move {
-                    scrape::download_page(&page.url, &chapter_path, page.number, 3).await.ok()
+                let page_url = page.url.clone();
+                let page_number = page.number.clone();
+                let handle = tokio::spawn(async move {
+                    scrape::download_page(&page_url, &chapter_path, page_number, 3).await.ok();
                 });
+                tasks.push(handle);
             }
         }
 
-        task::yield_now().await;
+        for task in tasks {
+            task.await?;
+        }
         Ok(())
     }
 

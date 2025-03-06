@@ -234,6 +234,7 @@ pub async fn download_page(
         return Ok(());
     }
 
+    println!("error with page {page_url}");
     return Err(MgdlError::Scrape(format!(
         "Could not download page from {}",
         page_url
