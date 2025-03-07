@@ -10,6 +10,8 @@ use crate::{
     MgdlError,
 };
 
+const INITIAL_DELAY: u64 = 300;
+
 type Result<T> = std::result::Result<T, MgdlError>;
 
 #[derive(Debug)]
@@ -24,7 +26,7 @@ fn create_selector(selectors: &str) -> Result<Selector> {
 
 pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Result<Vec<Page>> {
     let mut attempts = 0;
-    let mut delay = Duration::from_micros(100);
+    let mut delay = Duration::from_micros(INITIAL_DELAY);
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
     loop {
         if attempts == max_attempts {
@@ -75,7 +77,7 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Resul
 
 async fn get_manga_chapters(manga_hash: &str, manga_id: &str, max_attempts: usize) -> Result<Vec<Chapter>> {
     let mut attempts = 0;
-    let mut delay = Duration::from_micros(100);
+    let mut delay = Duration::from_micros(INITIAL_DELAY);
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
     loop {
         if attempts == max_attempts {
