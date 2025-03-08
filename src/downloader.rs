@@ -34,6 +34,7 @@ impl Downloader {
 
     pub async fn download_manga(&self, manga_url: &str) -> Result<Manga> {
         let (manga, chapters) = self.add(manga_url).await?;
+
         println!("Downloading {}", &manga.name);
         let manga_path = self
             .manga_dir
@@ -54,28 +55,27 @@ impl Downloader {
 
         let mut join_set = JoinSet::new();
 
-        let bar_style =
+        let bar_style_generator = || -> Result<ProgressStyle> {
             ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
                 .map_err(|_| {
                     MgdlError::Scrape("Could not create progress bar style".to_string())
-                })?;
+                })
+        };
         let progress_bar = ProgressBar::new(chapters.len() as u64)
             .with_prefix(format!("Locating chapters and pages"));
-        progress_bar.set_style(bar_style);
+        progress_bar.set_style(bar_style_generator()?);
         for chapter in chapters {
             let chapter_number = chapter
                 .number
                 .split('-')
                 .next()
                 .ok_or(MgdlError::Downloader(
-                    "Could not find manga's name".to_string(),
+                    "Could not find manga's name".to_string()
                 ))?
                 .parse::<usize>()?;
 
-            if let Some(skip) = skip_chaps {
-                if chapter_number <= skip {
-                    continue;
-                }
+            if skip_chaps.map_or(false, |skip| chapter_number <= skip) {
+                continue;
             }
 
             let pages = scrape::get_chapter_pages(&chapter.hash, 20).await?;
@@ -99,12 +99,9 @@ impl Downloader {
         }
         progress_bar.finish_and_clear();
 
-        let progress_bar =
-            ProgressBar::new(join_set.len() as u64).with_prefix(format!("Downloading pages"));
-        progress_bar.set_style(
-            ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
-                .unwrap(),
-        );
+        let progress_bar = ProgressBar::new(join_set.len() as u64)
+            .with_prefix(format!("Downloading pages"));
+        progress_bar.set_style(bar_style_generator()?);
         while let Some(res) = join_set.join_next().await {
             let _ = res?;
             progress_bar.inc(1);
@@ -119,6 +116,8 @@ impl Downloader {
         let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
         let (new_manga, chapters) = scrape::manga_from_url(&manga_url).await?;
         let skip_chaps = self.skip_chaps(&new_manga)?;
+        println!("Skip_chaps: {skip_chaps}");
+        return Ok(new_manga);
         let manga_path = self
             .manga_dir
             .join(PathBuf::from(format!("{}", &new_manga.normalized_name)));
@@ -140,25 +139,16 @@ impl Downloader {
 
     pub fn skip_chaps(&self, manga: &Manga) -> Result<usize> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
-        let mut chaps: Vec<usize> = fs::read_dir(&manga_path)?
-            .filter_map(|entry| entry.ok())
+        let max_chapter: usize = fs::read_dir(&manga_path)?
+            .filter_map(std::result::Result::ok)
             .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter(|name| name.contains("chapter"))
-            .filter_map(|name| {
-                name.split('_')
-                    .nth(1)
-                    .and_then(|s| s.split('-').next())
-                    .and_then(|num| num.parse::<usize>().ok())
-            })
-            .collect();
+            .filter(|file_name| file_name.contains("chapter"))
+            .filter_map(|chapter_name| chapter_name.split('_').nth(1).map(|s| s.to_string()))
+            .filter_map(|chapter_number| chapter_number.split("-").next()?.parse::<usize>().ok())
+            .max()
+            .ok_or(MgdlError::Downloader("Manga directory is empty".to_string()))?;
 
-        if chaps.is_empty() {
-            chaps.push(0);
-        }
-
-        Ok(*(chaps.iter().max().ok_or(MgdlError::Downloader(
-            "Could not find manga name".to_string(),
-        ))?))
+        Ok(max_chapter)
     }
 
     pub fn reset_db(&self) -> Result<()> {
