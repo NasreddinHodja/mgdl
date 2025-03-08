@@ -4,7 +4,7 @@ use std::fmt;
 pub struct Chapter {
     pub hash: String,
     pub number: String,
-    pub manga: String,
+    pub _manga: String,
 }
 
 impl Chapter {
@@ -12,7 +12,7 @@ impl Chapter {
         Self {
             hash: hash.to_string(),
             number: number.to_string(),
-            manga: manga.to_string(),
+            _manga: manga.to_string(),
         }
     }
 }

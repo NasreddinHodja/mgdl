@@ -116,8 +116,6 @@ impl Downloader {
         let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
         let (new_manga, chapters) = scrape::manga_from_url(&manga_url).await?;
         let skip_chaps = self.skip_chaps(&new_manga)?;
-        println!("Skip_chaps: {skip_chaps}");
-        return Ok(new_manga);
         let manga_path = self
             .manga_dir
             .join(PathBuf::from(format!("{}", &new_manga.normalized_name)));

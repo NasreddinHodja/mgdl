@@ -1,4 +1,14 @@
-use mgdl::{cli, config, downloader, MgdlError};
+mod cli;
+mod config;
+mod db;
+mod downloader;
+mod error;
+mod models;
+mod scrape;
+
+use error::MgdlError;
+use models::Chapter;
+use models::Manga;
 
 #[tokio::main]
 async fn main() {
