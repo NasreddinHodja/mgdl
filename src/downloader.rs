@@ -7,7 +7,7 @@ use tokio::task::JoinSet;
 
 type Result<T> = std::result::Result<T, MgdlError>;
 
-const MAX_ATTEMPTS: usize = 15;
+const MAX_ATTEMPTS: usize = 20;
 
 pub struct Downloader {
     db: db::Db,
