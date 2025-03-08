@@ -1,4 +1,10 @@
+use dirs::home_dir;
 use regex::Regex;
+use std::path::PathBuf;
+
+use crate::MgdlError;
+
+type Result<T> = std::result::Result<T, MgdlError>;
 
 pub fn normalize(s: &str) -> String {
     let replacements = vec![
@@ -37,4 +43,16 @@ pub fn extract_hash(url: &str) -> Option<String> {
     re.captures(url)
         .and_then(|caps| caps.get(1))
         .map(|m| m.as_str().to_string())
+}
+
+pub fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
+    if let Some(stripped) = path.strip_prefix("~").ok() {
+        if let Some(home) = home_dir() {
+            return Ok(home.join(stripped));
+        } else {
+            return Err(MgdlError::Config("Could not determine home directory".to_string()));
+        }
+    }
+
+    Ok(path)
 }

@@ -1,12 +1,11 @@
-use dirs::home_dir;
 use std::fs;
 use std::path::PathBuf;
 use toml;
-
 use directories::ProjectDirs;
 use serde::Deserialize;
 
-use crate::error::MgdlError;
+use crate::MgdlError;
+use crate::utils::expand_tilde;
 
 pub type Result<T> = std::result::Result<T, MgdlError>;
 
@@ -40,14 +39,3 @@ impl Config {
     }
 }
 
-fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
-    if let Some(stripped) = path.strip_prefix("~").ok() {
-        if let Some(home) = home_dir() {
-            return Ok(home.join(stripped));
-        } else {
-            return Err(MgdlError::Config("Could not determine home directory".to_string()));
-        }
-    }
-
-    Ok(path)
-}
