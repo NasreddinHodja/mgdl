@@ -15,6 +15,7 @@ pub struct Config {
     pub manga_dir: String,
 }
 
+#[derive(Debug)]
 pub struct MgdlConfig {
     pub manga_dir: PathBuf,
     pub db_dir: PathBuf,
@@ -22,40 +23,29 @@ pub struct MgdlConfig {
 
 impl Config {
     pub fn load() -> Result<MgdlConfig> {
-        if let Some(proj_dirs) = ProjectDirs::from("com", "NasreddinHodja", "Mgdl") {
-            let config_dir = proj_dirs.config_dir();
+        let project_dirs = ProjectDirs::from("com", "NasreddinHodja", "Mgdl")
+            .ok_or_else(|| MgdlError::Config("Could not open config dirs.".to_string()))?;
 
-            fs::create_dir_all(config_dir)?;
+        let config_dir = project_dirs.config_dir();
+        fs::create_dir_all(config_dir)?;
 
-            let config_file = config_dir.join("config.toml");
-            let config_string = fs::read_to_string(&config_file)?;
-            let config: Config = toml::from_str(&config_string)?;
-            let mgdl_config = MgdlConfig {
-                manga_dir: expand_tilde(PathBuf::from(&config.manga_dir))?,
-                db_dir: expand_tilde(PathBuf::from(
-                    &config_dir
-                        .to_str()
-                        .ok_or(MgdlError::Config(format!(
-                            "Could not find config directory"
-                        )))?
-                        .to_string(),
-                ))?,
-            };
+        let config_file = config_dir.join("config.toml");
+        let config_string = fs::read_to_string(&config_file)?;
+        let config: Config = toml::from_str(&config_string)?;
 
-            Ok(mgdl_config)
-        } else {
-            Err(MgdlError::Config("Could not open config dirs.".to_string()))
-        }
+        let manga_dir = expand_tilde(PathBuf::from(&config.manga_dir))?;
+        let db_dir = expand_tilde(config_dir.to_path_buf())?;
+
+        Ok(MgdlConfig { manga_dir, db_dir })
     }
 }
 
 fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
-    if let Some(home) = home_dir() {
-        if path.starts_with("~") {
-            return Ok(home
-                .join(path.strip_prefix("~").map_err(|err| {
-                    MgdlError::Config(format!("Could not expand path: {}", err))
-                })?));
+    if let Some(stripped) = path.strip_prefix("~").ok() {
+        if let Some(home) = home_dir() {
+            return Ok(home.join(stripped));
+        } else {
+            return Err(MgdlError::Config("Could not determine home directory".to_string()));
         }
     }
 
