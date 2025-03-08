@@ -50,7 +50,9 @@ pub fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
         if let Some(home) = home_dir() {
             return Ok(home.join(stripped));
         } else {
-            return Err(MgdlError::Config("Could not determine home directory".to_string()));
+            return Err(MgdlError::Config(
+                "Could not determine home directory".to_string(),
+            ));
         }
     }
 

@@ -38,9 +38,7 @@ impl Downloader {
         let (manga, chapters) = self.add(manga_url).await?;
 
         println!("Downloading {}", &manga.name);
-        let manga_path = self
-            .manga_dir
-            .join(format!("{}", &manga.normalized_name));
+        let manga_path = self.manga_dir.join(format!("{}", &manga.normalized_name));
 
         self.download_chapters(&manga_path, &chapters, None).await?;
 
@@ -59,9 +57,7 @@ impl Downloader {
 
         let bar_style_generator = || -> Result<ProgressStyle> {
             ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
-                .map_err(|_| {
-                    MgdlError::Scrape("Could not create progress bar style".to_string())
-                })
+                .map_err(|_| MgdlError::Scrape("Could not create progress bar style".to_string()))
         };
         let progress_bar = ProgressBar::new(chapters.len() as u64)
             .with_prefix(format!("Locating chapters and pages"));
@@ -72,7 +68,7 @@ impl Downloader {
                 .split('-')
                 .next()
                 .ok_or(MgdlError::Downloader(
-                    "Could not find manga's name".to_string()
+                    "Could not find manga's name".to_string(),
                 ))?
                 .parse::<usize>()?;
 
@@ -81,8 +77,7 @@ impl Downloader {
             }
 
             let pages = scrape::get_chapter_pages(&chapter.hash, MAX_ATTEMPTS).await?;
-            let chapter_path =
-                manga_path.join(format!("chapter_{}", &chapter.number));
+            let chapter_path = manga_path.join(format!("chapter_{}", &chapter.number));
 
             fs::create_dir_all(&chapter_path)?;
 
@@ -101,8 +96,8 @@ impl Downloader {
         }
         progress_bar.finish_and_clear();
 
-        let progress_bar = ProgressBar::new(join_set.len() as u64)
-            .with_prefix(format!("Downloading pages"));
+        let progress_bar =
+            ProgressBar::new(join_set.len() as u64).with_prefix(format!("Downloading pages"));
         progress_bar.set_style(bar_style_generator()?);
         while let Some(res) = join_set.join_next().await {
             let _ = res?;
@@ -146,7 +141,9 @@ impl Downloader {
             .filter_map(|chapter_name| chapter_name.split('_').nth(1).map(|s| s.to_string()))
             .filter_map(|chapter_number| chapter_number.split("-").next()?.parse::<usize>().ok())
             .max()
-            .ok_or(MgdlError::Downloader("Manga directory is empty".to_string()))?;
+            .ok_or(MgdlError::Downloader(
+                "Manga directory is empty".to_string(),
+            ))?;
 
         Ok(max_chapter)
     }

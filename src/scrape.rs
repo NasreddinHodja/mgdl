@@ -6,7 +6,7 @@ use std::{fs, path::PathBuf, thread::sleep};
 
 use crate::{
     models::{Chapter, Manga},
-    utils::{normalize, extract_hash},
+    utils::{extract_hash, normalize},
     MgdlError,
 };
 

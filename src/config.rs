@@ -1,11 +1,11 @@
+use directories::ProjectDirs;
+use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 use toml;
-use directories::ProjectDirs;
-use serde::Deserialize;
 
-use crate::MgdlError;
 use crate::utils::expand_tilde;
+use crate::MgdlError;
 
 pub type Result<T> = std::result::Result<T, MgdlError>;
 
@@ -38,4 +38,3 @@ impl Config {
         Ok(MgdlConfig { manga_dir, db_dir })
     }
 }
-
