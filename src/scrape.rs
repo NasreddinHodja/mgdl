@@ -1,4 +1,3 @@
-use regex::Regex;
 use reqwest::{get, StatusCode};
 use scraper::{Html, Selector};
 use std::io::Write;
@@ -7,6 +6,7 @@ use std::{fs, path::PathBuf, thread::sleep};
 
 use crate::{
     models::{Chapter, Manga},
+    utils::{normalize, extract_hash},
     MgdlError,
 };
 
@@ -28,11 +28,8 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Resul
     let mut attempts = 0;
     let mut delay = Duration::from_micros(INITIAL_DELAY);
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
-    loop {
-        if attempts == max_attempts {
-            break;
-        }
 
+    while attempts < max_attempts {
         let response = get(&url).await?;
 
         if response.status() != StatusCode::OK {
@@ -240,11 +237,8 @@ pub async fn download_page(
 ) -> Result<()> {
     let mut attempts = 0;
     let mut delay = Duration::from_micros(100);
-    loop {
-        if attempts == max_attempts {
-            break;
-        }
 
+    while attempts < max_attempts {
         let response = get(&page_url).await?;
 
         if response.status() != StatusCode::OK {
@@ -260,7 +254,7 @@ pub async fn download_page(
             "Could not find file extension".to_string(),
         ))?;
         let file_name = format!("{:03}.{}", page_number, file_ext);
-        let file_path = chapter_path.join(PathBuf::from(file_name));
+        let file_path = chapter_path.join(&file_name);
 
         let mut file = fs::File::create(&file_path)?;
         file.write_all(&bytes)?;
@@ -273,44 +267,4 @@ pub async fn download_page(
         "Could not download page from {}",
         page_url
     )));
-}
-
-fn normalize(s: &str) -> String {
-    let replacements = [
-        (r"[áàâãä]", "a"),
-        (r"[éèêë]", "e"),
-        (r"[íìîï]", "i"),
-        (r"[óòôõö]", "o"),
-        (r"[úùûü]", "u"),
-        (r"[ç]", "c"),
-        (r"[ñ]", "n"),
-        (r"[ýÿ]", "y"),
-        (r"[ÁÀÂÃÄ]", "A"),
-        (r"[ÉÈÊË]", "E"),
-        (r"[ÍÌÎÏ]", "I"),
-        (r"[ÓÒÔÕÖ]", "O"),
-        (r"[ÚÙÛÜ]", "U"),
-        (r"[Ç]", "C"),
-        (r"[Ñ]", "N"),
-        (r"[Ý]", "Y"),
-    ];
-
-    let mut s = s.to_string();
-
-    for (pattern, replacement) in &replacements {
-        let re = Regex::new(pattern).unwrap();
-        s = re.replace_all(&s, *replacement).to_string();
-    }
-
-    let re = Regex::new(r"[^a-zA-Z0-9]+").unwrap();
-    s = re.replace_all(&s, "_").to_string();
-
-    s.trim_matches('_').to_lowercase()
-}
-
-fn extract_hash(url: &str) -> Option<String> {
-    let re = Regex::new(r"/series/([^/]+)(?:/|$)").ok()?;
-    re.captures(url)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str().to_string())
 }

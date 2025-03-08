@@ -25,7 +25,7 @@ impl fmt::Display for MgdlError {
             MgdlError::Config(msg) => write!(f, "Config error: {}", msg),
             MgdlError::Scrape(msg) => write!(f, "Scrape error: {}", msg),
             MgdlError::Db(msg) => write!(f, "DB error: {}", msg),
-            MgdlError::Downloader(msg) => write!(f, "Downloader Error: {}", msg),
+            MgdlError::Downloader(msg) => write!(f, "Downloader error: {}", msg),
             MgdlError::Join(err) => write!(f, "Join error: {}", err),
         }
     }

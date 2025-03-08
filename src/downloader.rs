@@ -7,6 +7,8 @@ use tokio::task::JoinSet;
 
 type Result<T> = std::result::Result<T, MgdlError>;
 
+const MAX_ATTEMPTS: usize = 15;
+
 pub struct Downloader {
     db: db::Db,
     manga_dir: PathBuf,
@@ -14,7 +16,7 @@ pub struct Downloader {
 
 impl Downloader {
     pub fn new(manga_dir: PathBuf, db_dir: PathBuf) -> Result<Self> {
-        let db_path = db_dir.join(PathBuf::from("mgdl.db"));
+        let db_path = db_dir.join("mgdl.db");
         let db = db::Db::new(db_path);
         db.init()?;
 
@@ -38,7 +40,7 @@ impl Downloader {
         println!("Downloading {}", &manga.name);
         let manga_path = self
             .manga_dir
-            .join(PathBuf::from(format!("{}", &manga.normalized_name)));
+            .join(format!("{}", &manga.normalized_name));
 
         self.download_chapters(&manga_path, &chapters, None).await?;
 
@@ -78,9 +80,9 @@ impl Downloader {
                 continue;
             }
 
-            let pages = scrape::get_chapter_pages(&chapter.hash, 20).await?;
+            let pages = scrape::get_chapter_pages(&chapter.hash, MAX_ATTEMPTS).await?;
             let chapter_path =
-                manga_path.join(PathBuf::from(format!("chapter_{}", &chapter.number)));
+                manga_path.join(format!("chapter_{}", &chapter.number));
 
             fs::create_dir_all(&chapter_path)?;
 
@@ -92,7 +94,7 @@ impl Downloader {
                     page_url,
                     chapter_path,
                     page_number,
-                    20,
+                    MAX_ATTEMPTS,
                 ));
             }
             progress_bar.inc(1);
@@ -118,7 +120,7 @@ impl Downloader {
         let skip_chaps = self.skip_chaps(&new_manga)?;
         let manga_path = self
             .manga_dir
-            .join(PathBuf::from(format!("{}", &new_manga.normalized_name)));
+            .join(format!("{}", &new_manga.normalized_name));
 
         self.download_chapters(&manga_path, &chapters, Some(skip_chaps))
             .await?;

@@ -5,6 +5,7 @@ mod downloader;
 mod error;
 mod models;
 mod scrape;
+mod utils;
 
 use error::MgdlError;
 use models::Chapter;
