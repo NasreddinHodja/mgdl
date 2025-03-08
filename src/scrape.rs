@@ -75,7 +75,11 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Resul
     )))
 }
 
-async fn get_manga_chapters(manga_hash: &str, manga_id: &str, max_attempts: usize) -> Result<Vec<Chapter>> {
+async fn get_manga_chapters(
+    manga_hash: &str,
+    manga_id: &str,
+    max_attempts: usize,
+) -> Result<Vec<Chapter>> {
     let mut attempts = 0;
     let mut delay = Duration::from_micros(INITIAL_DELAY);
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
@@ -133,7 +137,6 @@ async fn get_manga_chapters(manga_hash: &str, manga_id: &str, max_attempts: usiz
                 } else {
                     format!("{:02}", numbers[1])
                 };
-
 
                 let number = format!("{}-{}", num, subnum);
                 let chapter = Chapter::new(&hash, &number, &manga_id);
@@ -230,8 +233,8 @@ pub async fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
 }
 
 pub async fn download_page(
-    page_url: &str,
-    chapter_path: &PathBuf,
+    page_url: String,
+    chapter_path: PathBuf,
     page_number: usize,
     max_attempts: usize,
 ) -> Result<()> {
@@ -242,7 +245,7 @@ pub async fn download_page(
             break;
         }
 
-        let response = get(page_url).await?;
+        let response = get(&page_url).await?;
 
         if response.status() != StatusCode::OK {
             attempts += 1;

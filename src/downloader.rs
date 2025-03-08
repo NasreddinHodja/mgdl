@@ -1,8 +1,9 @@
 use crate::MgdlError;
-use tokio;
 use crate::{db, scrape, Chapter, Manga};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::PathBuf;
+use tokio::task::JoinSet;
 
 type Result<T> = std::result::Result<T, MgdlError>;
 
@@ -33,7 +34,7 @@ impl Downloader {
 
     pub async fn download_manga(&self, manga_url: &str) -> Result<Manga> {
         let (manga, chapters) = self.add(manga_url).await?;
-        println!("Downloading manga {}", &manga.name);
+        println!("Downloading {}", &manga.name);
         let manga_path = self
             .manga_dir
             .join(PathBuf::from(format!("{}", &manga.normalized_name)));
@@ -51,8 +52,16 @@ impl Downloader {
     ) -> Result<()> {
         fs::create_dir_all(&manga_path)?;
 
-        let mut tasks = vec![];
+        let mut join_set = JoinSet::new();
 
+        let bar_style =
+            ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
+                .map_err(|_| {
+                    MgdlError::Scrape("Could not create progress bar style".to_string())
+                })?;
+        let progress_bar = ProgressBar::new(chapters.len() as u64)
+            .with_prefix(format!("Locating chapters and pages"));
+        progress_bar.set_style(bar_style);
         for chapter in chapters {
             let chapter_number = chapter
                 .number
@@ -75,22 +84,33 @@ impl Downloader {
 
             fs::create_dir_all(&chapter_path)?;
 
-
-            println!("+ Chapter {}", chapter.number);
             for page in pages {
                 let chapter_path = chapter_path.clone();
                 let page_url = page.url.clone();
                 let page_number = page.number.clone();
-                let handle = tokio::spawn(async move {
-                    scrape::download_page(&page_url, &chapter_path, page_number, 20).await.ok();
-                });
-                tasks.push(handle);
+                join_set.spawn(scrape::download_page(
+                    page_url,
+                    chapter_path,
+                    page_number,
+                    20,
+                ));
             }
+            progress_bar.inc(1);
         }
+        progress_bar.finish_and_clear();
 
-        for task in tasks {
-            task.await?;
+        let progress_bar =
+            ProgressBar::new(join_set.len() as u64).with_prefix(format!("Downloading pages"));
+        progress_bar.set_style(
+            ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
+                .unwrap(),
+        );
+        while let Some(res) = join_set.join_next().await {
+            let _ = res?;
+            progress_bar.inc(1);
         }
+        progress_bar.finish_and_clear();
+
         Ok(())
     }
 
@@ -103,7 +123,8 @@ impl Downloader {
             .manga_dir
             .join(PathBuf::from(format!("{}", &new_manga.normalized_name)));
 
-        self.download_chapters(&manga_path, &chapters, Some(skip_chaps)).await?;
+        self.download_chapters(&manga_path, &chapters, Some(skip_chaps))
+            .await?;
 
         Ok(new_manga)
     }

@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
 
-use crate::{MgdlError, Manga};
+use crate::{Manga, MgdlError};
 
 type Result<T> = std::result::Result<T, MgdlError>;
 
