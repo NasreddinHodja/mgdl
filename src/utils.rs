@@ -1,4 +1,4 @@
-use dirs::home_dir;
+use directories::BaseDirs;
 use regex::Regex;
 use std::path::PathBuf;
 
@@ -47,8 +47,8 @@ pub fn extract_hash(url: &str) -> Option<String> {
 
 pub fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
     if let Some(stripped) = path.strip_prefix("~").ok() {
-        if let Some(home) = home_dir() {
-            return Ok(home.join(stripped));
+        if let Some(base_dirs) = BaseDirs::new() {
+            return Ok(base_dirs.home_dir().join(stripped));
         } else {
             return Err(MgdlError::Config(
                 "Could not determine home directory".to_string(),
