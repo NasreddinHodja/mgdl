@@ -1,9 +1,12 @@
-use crate::MgdlError;
-use crate::{db, scrape, Chapter, Manga};
-use indicatif::{ProgressBar, ProgressStyle};
-use std::fs;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
+use indicatif::MultiProgress;
 use tokio::task::JoinSet;
+
+use crate::{
+    db, scrape,
+    utils::{gen_progress_bar, gen_progress_spinner},
+    Chapter, Manga, MgdlError,
+};
 
 type Result<T> = std::result::Result<T, MgdlError>;
 
@@ -12,6 +15,7 @@ const MAX_ATTEMPTS: usize = 20;
 pub struct Downloader {
     db: db::Db,
     manga_dir: PathBuf,
+    progress: MultiProgress,
 }
 
 impl Downloader {
@@ -20,28 +24,40 @@ impl Downloader {
         let db = db::Db::new(db_path);
         db.init()?;
 
+        let progress = MultiProgress::new();
+
         Ok(Self {
             db,
             manga_dir: manga_dir,
+            progress,
         })
     }
 
     pub async fn add(&self, manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
+        let spinner = self.progress.add(gen_progress_spinner()?);
+
+        spinner.set_message("Scraping manga and chapters");
         let (manga, chapters) = scrape::manga_from_url(manga_url, MAX_ATTEMPTS).await?;
 
+        spinner.set_message(format!("Adding manga {}", &manga.name));
         let added_manga = self.db.add_manga(manga)?;
 
+        spinner.finish_and_clear();
+        self.progress.remove(&spinner);
         Ok((added_manga, chapters))
     }
 
     pub async fn download_manga(&self, manga_url: &str) -> Result<Manga> {
         let (manga, chapters) = self.add(manga_url).await?;
-
-        println!("Downloading {}", &manga.name);
         let manga_path = self.manga_dir.join(format!("{}", &manga.normalized_name));
+
+        let spinner = self.progress.add(gen_progress_spinner()?);
+        spinner.set_message(format!("Downloading {}", &manga.name));
 
         self.download_chapters(&manga_path, &chapters, None).await?;
 
+        spinner.finish_and_clear();
+        self.progress.remove(&spinner);
         Ok(manga)
     }
 
@@ -55,13 +71,8 @@ impl Downloader {
 
         let mut join_set = JoinSet::new();
 
-        let bar_style_generator = || -> Result<ProgressStyle> {
-            ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
-                .map_err(|_| MgdlError::Scrape("Could not create progress bar style".to_string()))
-        };
-        let progress_bar = ProgressBar::new(chapters.len() as u64)
-            .with_prefix(format!("Locating chapters and pages"));
-        progress_bar.set_style(bar_style_generator()?);
+        let progress_bar = self.progress.add(gen_progress_bar(chapters.len() as u64)?);
+        progress_bar.set_prefix(format!("Locating chapters and pages"));
         for chapter in chapters {
             let chapter_number = chapter
                 .number
@@ -84,7 +95,8 @@ impl Downloader {
             for page in pages {
                 let chapter_path = chapter_path.clone();
                 let page_url = page.url.clone();
-                let page_number = page.number.clone();
+                let page_number = page.number;
+
                 join_set.spawn(scrape::download_page(
                     page_url,
                     chapter_path,
@@ -95,40 +107,52 @@ impl Downloader {
             progress_bar.inc(1);
         }
         progress_bar.finish_and_clear();
+        self.progress.remove(&progress_bar);
 
-        let progress_bar =
-            ProgressBar::new(join_set.len() as u64).with_prefix(format!("Downloading pages"));
-        progress_bar.set_style(bar_style_generator()?);
+        let progress_bar = self.progress.add(gen_progress_bar(join_set.len() as u64)?);
+        progress_bar.set_prefix(format!("Downloading pages"));
         while let Some(res) = join_set.join_next().await {
             let _ = res?;
             progress_bar.inc(1);
         }
         progress_bar.finish_and_clear();
+        self.progress.remove(&progress_bar);
 
         Ok(())
     }
 
     pub async fn update(&self, manga_name: &str) -> Result<Manga> {
+        let spinner = self.progress.add(gen_progress_spinner()?);
+        spinner.set_message("Getting local manga data");
+
         let manga = self.db.get_manga_by_normalized_name(manga_name)?;
         let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
+
+        spinner.set_message("Scraping manga and chapters");
         let (new_manga, chapters) = scrape::manga_from_url(&manga_url, MAX_ATTEMPTS).await?;
         let skip_chaps = self.skip_chaps(&new_manga)?;
         let manga_path = self
             .manga_dir
             .join(format!("{}", &new_manga.normalized_name));
 
+        spinner.set_message(format!("Downloading {}", &manga.name));
         self.download_chapters(&manga_path, &chapters, Some(skip_chaps))
             .await?;
 
+        spinner.finish_and_clear();
+        self.progress.remove(&spinner);
         Ok(new_manga)
     }
 
     pub async fn update_all(&self) -> Result<()> {
+        let spinner = self.progress.add(gen_progress_spinner()?);
         for manga in self.db.get_ongoing_manga()? {
-            println!("Trying to update {}", &manga.name);
+            spinner.set_message(format!("Trying to update {}", &manga.name));
             self.update(&manga.normalized_name).await?;
         }
 
+        spinner.finish_and_clear();
+        self.progress.remove(&spinner);
         Ok(())
     }
 
@@ -149,7 +173,13 @@ impl Downloader {
     }
 
     pub fn reset_db(&self) -> Result<()> {
+        let spinner = self.progress.add(gen_progress_spinner()?);
+
+        spinner.set_message("Dropping local DB");
         self.db.drop()?;
+
+        spinner.finish_and_clear();
+        self.progress.remove(&spinner);
         Ok(())
     }
 }

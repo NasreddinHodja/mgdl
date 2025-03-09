@@ -25,15 +25,13 @@ async fn run() -> Result<(), MgdlError> {
     let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir)?;
 
     if args.reset {
-        println!("Reseting DB...");
         if let Err(err) = dldr.reset_db() {
             eprintln!("{}", err);
         }
     } else if let Some(manga_url) = args.add {
-        match dldr.add(&manga_url).await {
-            Ok((manga, _chapters)) => println!("Added manga {}", &manga.name),
-            Err(err) => eprintln!("{}", err),
-        };
+        if let Err(err) = dldr.add(&manga_url).await {
+            eprintln!("{}", err)
+        }
     } else if let Some(manga_url) = args.download {
         if let Err(err) = dldr.download_manga(&manga_url).await {
             eprintln!("{}", err);
@@ -47,9 +45,8 @@ async fn run() -> Result<(), MgdlError> {
                     };
                 }
                 manga_name => {
-                    match dldr.update(&manga_name).await {
-                        Ok(manga) => println!("Updated {}", manga.name),
-                        Err(err) => eprintln!("{}", err),
+                    if let Err(err) = dldr.update(&manga_name).await {
+                        eprintln!("{}", err);
                     };
                 }
             };

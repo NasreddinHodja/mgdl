@@ -1,6 +1,7 @@
 use directories::BaseDirs;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::{time::Duration, path::PathBuf};
 use regex::Regex;
-use std::path::PathBuf;
 
 use crate::MgdlError;
 
@@ -57,4 +58,24 @@ pub fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
     }
 
     Ok(path)
+}
+
+pub fn gen_progress_bar(size: u64) -> Result<ProgressBar> {
+    let bar = ProgressBar::new(size);
+    let style =
+        ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
+            .map_err(|_| MgdlError::Scrape("Could not create progress bar style".to_string()))?;
+    bar.set_style(style);
+
+    Ok(bar)
+}
+
+pub fn gen_progress_spinner() -> Result<ProgressBar> {
+    let spinner = ProgressBar::new_spinner();
+    let style = ProgressStyle::with_template("{spinner} {msg}")
+        .map_err(|_| MgdlError::Scrape("Could not create spinner style".to_string()))?;
+    spinner.set_style(style);
+    spinner.enable_steady_tick(Duration::from_millis(50));
+
+    Ok(spinner)
 }

@@ -21,10 +21,15 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Resul
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
 
     let response = retry(
-        || async { get(&url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        || async {
+            get(&url)
+                .await
+                .map_err(|err| MgdlError::Scrape(err.to_string()))
+        },
         max_attempts,
-        Duration::from_millis(INITIAL_DELAY)
-    ).await?;
+        Duration::from_millis(INITIAL_DELAY),
+    )
+    .await?;
 
     let mut page_urls: Vec<Page> = vec![];
 
@@ -61,10 +66,15 @@ async fn get_manga_chapters(
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
 
     let response = retry(
-        || async { get(&url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        || async {
+            get(&url)
+                .await
+                .map_err(|err| MgdlError::Scrape(err.to_string()))
+        },
         max_attempts,
-        Duration::from_millis(INITIAL_DELAY)
-    ).await?;
+        Duration::from_millis(INITIAL_DELAY),
+    )
+    .await?;
 
     let mut chapters: Vec<Chapter> = vec![];
 
@@ -123,10 +133,15 @@ async fn get_manga_chapters(
 #[allow(unused_variables)]
 pub async fn manga_from_url(manga_url: &str, max_attempts: usize) -> Result<(Manga, Vec<Chapter>)> {
     let response = retry(
-        || async { get(manga_url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        || async {
+            get(manga_url)
+                .await
+                .map_err(|err| MgdlError::Scrape(err.to_string()))
+        },
         max_attempts,
-        Duration::from_millis(INITIAL_DELAY)
-    ).await?;
+        Duration::from_millis(INITIAL_DELAY),
+    )
+    .await?;
 
     let manga_html = Html::parse_document(&response.text().await?);
 
@@ -201,10 +216,15 @@ pub async fn download_page(
     max_attempts: usize,
 ) -> Result<()> {
     let response = retry(
-        || async { get(&page_url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        || async {
+            get(&page_url)
+                .await
+                .map_err(|err| MgdlError::Scrape(err.to_string()))
+        },
         max_attempts,
-        Duration::from_millis(INITIAL_DELAY)
-    ).await?;
+        Duration::from_millis(INITIAL_DELAY),
+    )
+    .await?;
 
     let bytes = response.bytes().await?;
 
