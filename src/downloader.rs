@@ -27,7 +27,7 @@ impl Downloader {
     }
 
     pub async fn add(&self, manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
-        let (manga, chapters) = scrape::manga_from_url(manga_url).await?;
+        let (manga, chapters) = scrape::manga_from_url(manga_url, MAX_ATTEMPTS).await?;
 
         let added_manga = self.db.add_manga(manga)?;
 
@@ -111,7 +111,7 @@ impl Downloader {
     pub async fn update(&self, manga_name: &str) -> Result<Manga> {
         let manga = self.db.get_manga_by_normalized_name(manga_name)?;
         let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
-        let (new_manga, chapters) = scrape::manga_from_url(&manga_url).await?;
+        let (new_manga, chapters) = scrape::manga_from_url(&manga_url, MAX_ATTEMPTS).await?;
         let skip_chaps = self.skip_chaps(&new_manga)?;
         let manga_path = self
             .manga_dir

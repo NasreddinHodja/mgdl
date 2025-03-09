@@ -47,3 +47,9 @@ impl fmt::Display for Manga {
         )
     }
 }
+
+#[derive(Debug)]
+pub struct Page {
+    pub url: String,
+    pub number: usize,
+}

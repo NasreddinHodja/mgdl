@@ -1,11 +1,10 @@
-use reqwest::{get, StatusCode};
+use reqwest::get;
 use scraper::{Html, Selector};
-use std::io::Write;
-use std::time::Duration;
-use std::{fs, path::PathBuf, thread::sleep};
+use std::{fs, io::Write, path::PathBuf, time::Duration};
+use tokio::time::sleep;
 
 use crate::{
-    models::{Chapter, Manga},
+    models::{Chapter, Manga, Page},
     utils::{extract_hash, normalize},
     MgdlError,
 };
@@ -14,62 +13,44 @@ const INITIAL_DELAY: u64 = 300;
 
 type Result<T> = std::result::Result<T, MgdlError>;
 
-#[derive(Debug)]
-pub struct Page {
-    pub url: String,
-    pub number: usize,
-}
-
 fn create_selector(selectors: &str) -> Result<Selector> {
     Selector::parse(selectors).map_err(|err| MgdlError::Scrape(err.to_string()))
 }
 
 pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Result<Vec<Page>> {
-    let mut attempts = 0;
-    let mut delay = Duration::from_micros(INITIAL_DELAY);
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
 
-    while attempts < max_attempts {
-        let response = get(&url).await?;
+    let response = retry(
+        || async { get(&url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        max_attempts,
+        Duration::from_millis(INITIAL_DELAY)
+    ).await?;
 
-        if response.status() != StatusCode::OK {
-            attempts += 1;
-            sleep(delay);
-            delay *= 2;
-            continue;
-        }
+    let mut page_urls: Vec<Page> = vec![];
 
-        let mut page_urls: Vec<Page> = vec![];
+    let html = Html::parse_document(&response.text().await?);
 
-        let html = Html::parse_document(&response.text().await?);
+    let pages_selector = create_selector("img")?;
 
-        let pages_selector = create_selector("img")?;
+    let chapter_elements = html.select(&pages_selector);
+    for chapter_element in chapter_elements {
+        let url = chapter_element
+            .attr("src")
+            .ok_or(MgdlError::Scrape("Could not find page url.".to_string()))?
+            .to_string();
+        let number = chapter_element
+            .attr("alt")
+            .ok_or(MgdlError::Scrape("Could not find page name.".to_string()))?
+            .to_string()
+            .split(' ')
+            .last()
+            .ok_or(MgdlError::Scrape("Could not find page name.".to_string()))?
+            .parse::<usize>()?;
 
-        let chapter_elements = html.select(&pages_selector);
-        for chapter_element in chapter_elements {
-            let url = chapter_element
-                .attr("src")
-                .ok_or(MgdlError::Scrape("Could not find page url.".to_string()))?
-                .to_string();
-            let number = chapter_element
-                .attr("alt")
-                .ok_or(MgdlError::Scrape("Could not find page name.".to_string()))?
-                .to_string()
-                .split(' ')
-                .last()
-                .ok_or(MgdlError::Scrape("Could not find page name.".to_string()))?
-                .parse::<usize>()?;
-
-            page_urls.push(Page { url, number });
-        }
-
-        return Ok(page_urls);
+        page_urls.push(Page { url, number });
     }
 
-    Err(MgdlError::Scrape(format!(
-        "Could not get full page list from {}",
-        &url
-    )))
+    Ok(page_urls)
 }
 
 async fn get_manga_chapters(
@@ -77,91 +58,75 @@ async fn get_manga_chapters(
     manga_id: &str,
     max_attempts: usize,
 ) -> Result<Vec<Chapter>> {
-    let mut attempts = 0;
-    let mut delay = Duration::from_micros(INITIAL_DELAY);
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
-    loop {
-        if attempts == max_attempts {
-            break;
-        }
 
-        let response = get(&url).await?;
+    let response = retry(
+        || async { get(&url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        max_attempts,
+        Duration::from_millis(INITIAL_DELAY)
+    ).await?;
 
-        if response.status() != StatusCode::OK {
-            attempts += 1;
-            sleep(delay);
-            delay *= 2;
-            continue;
-        }
+    let mut chapters: Vec<Chapter> = vec![];
 
-        let mut chapters: Vec<Chapter> = vec![];
+    let manga_html = Html::parse_document(&response.text().await?);
 
-        let manga_html = Html::parse_document(&response.text().await?);
+    let chapter_selector = create_selector("div > a")?;
+    let chapter_elements = manga_html.select(&chapter_selector);
 
-        let chapter_selector = create_selector("div > a")?;
-        let chapter_elements = manga_html.select(&chapter_selector);
+    for chapter_element in chapter_elements {
+        let url = chapter_element
+            .attr("href")
+            .ok_or(MgdlError::Scrape("Could not find chapter URL".to_string()))?;
+        let hash = url
+            .split('/')
+            .last()
+            .ok_or(MgdlError::Scrape("Could not find chapter hash".to_string()))?;
 
-        for chapter_element in chapter_elements {
-            let url = chapter_element
-                .attr("href")
-                .ok_or(MgdlError::Scrape("Could not find chapter URL".to_string()))?;
-            let hash = url
-                .split('/')
-                .last()
-                .ok_or(MgdlError::Scrape("Could not find chapter hash".to_string()))?;
+        let number_selector = create_selector("span > span")?;
+        let numbers_str = chapter_element
+            .select(&number_selector)
+            .next()
+            .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
+            .text()
+            .collect::<String>()
+            .trim()
+            .split(' ')
+            .last()
+            .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
+            .to_string();
+        let numbers = numbers_str
+            .split('.')
+            .map(|number: &str| number.parse::<usize>())
+            .collect::<std::result::Result<Vec<usize>, _>>()?;
 
-            let number_selector = create_selector("span > span")?;
-            let numbers_str = chapter_element
-                .select(&number_selector)
-                .next()
-                .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
-                .text()
-                .collect::<String>()
-                .trim()
-                .split(' ')
-                .last()
-                .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
-                .to_string();
-            let numbers = numbers_str
-                .split('.')
-                .map(|number: &str| number.parse::<usize>())
-                .collect::<std::result::Result<Vec<usize>, _>>()?;
-
-            if numbers.len() == 1 || numbers.len() == 2 {
-                let num = format!("{:04}", numbers[0]);
-                let subnum = if numbers.len() == 1 {
-                    "01".to_string()
-                } else {
-                    format!("{:02}", numbers[1])
-                };
-
-                let number = format!("{}-{}", num, subnum);
-                let chapter = Chapter::new(&hash, &number, &manga_id);
-                chapters.push(chapter);
+        if numbers.len() == 1 || numbers.len() == 2 {
+            let num = format!("{:04}", numbers[0]);
+            let subnum = if numbers.len() == 1 {
+                "01".to_string()
             } else {
-                return Err(MgdlError::Scrape(
-                    "Could not find chapter number.".to_string(),
-                ));
-            }
-        }
+                format!("{:02}", numbers[1])
+            };
 
-        return Ok(chapters);
+            let number = format!("{}-{}", num, subnum);
+            let chapter = Chapter::new(&hash, &number, &manga_id);
+            chapters.push(chapter);
+        } else {
+            return Err(MgdlError::Scrape(
+                "Could not find chapter number.".to_string(),
+            ));
+        }
     }
 
-    Err(MgdlError::Scrape(
-        "Could not get manga full chapter list".to_string(),
-    ))
+    Ok(chapters)
 }
 
-pub async fn manga_from_url(manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
-    let response = get(manga_url).await?;
-
-    if response.status() != StatusCode::OK {
-        return Err(MgdlError::Scrape(format!(
-            "Could not access manga url: {}",
-            manga_url
-        )));
-    }
+#[allow(unused_variables)]
+pub async fn manga_from_url(manga_url: &str, max_attempts: usize) -> Result<(Manga, Vec<Chapter>)> {
+    let response = retry(
+        || async { get(manga_url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        max_attempts,
+        Duration::from_millis(INITIAL_DELAY)
+    ).await?;
 
     let manga_html = Html::parse_document(&response.text().await?);
 
@@ -235,36 +200,50 @@ pub async fn download_page(
     page_number: usize,
     max_attempts: usize,
 ) -> Result<()> {
+    let response = retry(
+        || async { get(&page_url).await.map_err(|err| MgdlError::Scrape(err.to_string())) },
+        max_attempts,
+        Duration::from_millis(INITIAL_DELAY)
+    ).await?;
+
+    let bytes = response.bytes().await?;
+
+    let file_ext = page_url.split('.').last().ok_or(MgdlError::Scrape(
+        "Could not find file extension".to_string(),
+    ))?;
+    let file_name = format!("{:03}.{}", page_number, file_ext);
+    let file_path = chapter_path.join(&file_name);
+
+    let mut file = fs::File::create(&file_path)?;
+    file.write_all(&bytes)?;
+
+    Ok(())
+}
+
+async fn retry<F, Fut, T>(
+    mut operation: F,
+    max_attempts: usize,
+    initial_delay: Duration,
+) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T>>,
+{
     let mut attempts = 0;
-    let mut delay = Duration::from_micros(100);
+    let mut delay = initial_delay;
 
     while attempts < max_attempts {
-        let response = get(&page_url).await?;
-
-        if response.status() != StatusCode::OK {
-            attempts += 1;
-            sleep(delay);
-            delay *= 2;
-            continue;
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(_) => {
+                attempts += 1;
+                sleep(delay.clone()).await;
+                delay *= 2;
+            }
         }
-
-        let bytes = response.bytes().await?;
-
-        let file_ext = page_url.split('.').last().ok_or(MgdlError::Scrape(
-            "Could not find file extension".to_string(),
-        ))?;
-        let file_name = format!("{:03}.{}", page_number, file_ext);
-        let file_path = chapter_path.join(&file_name);
-
-        let mut file = fs::File::create(&file_path)?;
-        file.write_all(&bytes)?;
-
-        return Ok(());
     }
 
-    println!("error with page {page_url}");
-    return Err(MgdlError::Scrape(format!(
-        "Could not download page from {}",
-        page_url
-    )));
+    Err(MgdlError::Scrape(
+        "Operation failed after max attempts\n{:?}".to_string(),
+    ))
 }
