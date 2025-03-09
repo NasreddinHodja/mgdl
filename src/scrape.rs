@@ -130,7 +130,6 @@ async fn get_manga_chapters(
     Ok(chapters)
 }
 
-#[allow(unused_variables)]
 pub async fn manga_from_url(manga_url: &str, max_attempts: usize) -> Result<(Manga, Vec<Chapter>)> {
     let response = retry(
         || async {

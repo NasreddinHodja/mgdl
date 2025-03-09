@@ -1,7 +1,7 @@
 use directories::BaseDirs;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::{time::Duration, path::PathBuf};
 use regex::Regex;
+use std::{path::PathBuf, time::Duration};
 
 use crate::MgdlError;
 

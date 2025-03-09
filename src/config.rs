@@ -1,11 +1,9 @@
 use directories::ProjectDirs;
 use serde::Deserialize;
-use std::fs;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 use toml;
 
-use crate::utils::expand_tilde;
-use crate::MgdlError;
+use crate::{utils::expand_tilde, MgdlError};
 
 pub type Result<T> = std::result::Result<T, MgdlError>;
 

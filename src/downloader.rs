@@ -1,5 +1,5 @@
-use std::{fs, path::PathBuf};
 use indicatif::MultiProgress;
+use std::{fs, path::PathBuf};
 use tokio::task::JoinSet;
 
 use crate::{
