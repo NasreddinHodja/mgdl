@@ -54,7 +54,8 @@ impl Downloader {
         let spinner = self.progress.add(gen_progress_spinner()?);
         spinner.set_message(format!("Downloading {}", &manga.name));
 
-        self.download_chapters(&manga_path, &chapters, None).await?;
+        self.download_chapters(&manga_path, &manga.name, &chapters, None)
+            .await?;
 
         spinner.finish_and_clear();
         self.progress.remove(&spinner);
@@ -64,8 +65,9 @@ impl Downloader {
     pub async fn download_chapters(
         &self,
         manga_path: &PathBuf,
+        manga_name: &str,
         chapters: &Vec<Chapter>,
-        skip_chaps: Option<usize>,
+        skip_chaps: Option<&[usize]>,
     ) -> Result<()> {
         fs::create_dir_all(&manga_path)?;
 
@@ -83,7 +85,7 @@ impl Downloader {
                 ))?
                 .parse::<usize>()?;
 
-            if skip_chaps.map_or(false, |skip| chapter_number <= skip) {
+            if skip_chaps.map_or(false, |skips| skips.contains(&chapter_number)) {
                 continue;
             }
 
@@ -105,6 +107,10 @@ impl Downloader {
                 ));
             }
             progress_bar.inc(1);
+            progress_bar.println(format!(
+                "Downloaded \"{}\" - Chapter {}",
+                manga_name, &chapter.number
+            ));
         }
         progress_bar.finish_and_clear();
         self.progress.remove(&progress_bar);
@@ -136,7 +142,7 @@ impl Downloader {
             .join(format!("{}", &new_manga.normalized_name));
 
         spinner.set_message(format!("Downloading {}", &manga.name));
-        self.download_chapters(&manga_path, &chapters, Some(skip_chaps))
+        self.download_chapters(&manga_path, &manga.name, &chapters, Some(&skip_chaps))
             .await?;
 
         spinner.finish_and_clear();
@@ -156,20 +162,17 @@ impl Downloader {
         Ok(())
     }
 
-    pub fn skip_chaps(&self, manga: &Manga) -> Result<usize> {
+    pub fn skip_chaps(&self, manga: &Manga) -> Result<Vec<usize>> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
-        let max_chapter: usize = fs::read_dir(&manga_path)?
+        let existing_chaps: Vec<usize> = fs::read_dir(&manga_path)?
             .filter_map(std::result::Result::ok)
             .filter_map(|entry| entry.file_name().into_string().ok())
             .filter(|file_name| file_name.contains("chapter"))
             .filter_map(|chapter_name| chapter_name.split('_').nth(1).map(|s| s.to_string()))
             .filter_map(|chapter_number| chapter_number.split("-").next()?.parse::<usize>().ok())
-            .max()
-            .ok_or(MgdlError::Downloader(
-                "Manga directory is empty".to_string(),
-            ))?;
+            .collect();
 
-        Ok(max_chapter)
+        Ok(existing_chaps)
     }
 
     pub fn reset_db(&self) -> Result<()> {

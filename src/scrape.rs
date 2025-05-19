@@ -96,13 +96,13 @@ async fn get_manga_chapters(
         let numbers_str = chapter_element
             .select(&number_selector)
             .next()
-            .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
+            .ok_or(MgdlError::Scrape("Chapter number not found".to_string()))?
             .text()
             .collect::<String>()
             .trim()
             .split(' ')
             .last()
-            .ok_or(MgdlError::Scrape("Manga name not found".to_string()))?
+            .ok_or(MgdlError::Scrape("Chapter number not found".to_string()))?
             .to_string();
         let numbers = numbers_str
             .split('.')
