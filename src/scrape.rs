@@ -20,20 +20,9 @@ fn create_selector(selectors: &str) -> Result<Selector> {
 pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Result<Vec<Page>> {
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
 
-    let response = retry(
-        || async {
-            get(&url)
-                .await
-                .map_err(|err| MgdlError::Scrape(err.to_string()))
-        },
-        max_attempts,
-        Duration::from_millis(INITIAL_DELAY),
-    )
-    .await?;
+    let html = get_with_retry(&url, max_attempts, Duration::from_millis(INITIAL_DELAY)).await?;
 
     let mut page_urls: Vec<Page> = vec![];
-
-    let html = Html::parse_document(&response.text().await?);
 
     let pages_selector = create_selector("img")?;
 
@@ -55,7 +44,14 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Resul
         page_urls.push(Page { url, number });
     }
 
-    Ok(page_urls)
+    if page_urls.len() == 0 {
+        Err(MgdlError::Scrape(format!(
+            "Could not find pages for chapter. \nhtml = {:#?}",
+            html
+        )))
+    } else {
+        Ok(page_urls)
+    }
 }
 
 async fn get_manga_chapters(
@@ -65,20 +61,10 @@ async fn get_manga_chapters(
 ) -> Result<Vec<Chapter>> {
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
 
-    let response = retry(
-        || async {
-            get(&url)
-                .await
-                .map_err(|err| MgdlError::Scrape(err.to_string()))
-        },
-        max_attempts,
-        Duration::from_millis(INITIAL_DELAY),
-    )
-    .await?;
+    let manga_html =
+        get_with_retry(&url, max_attempts, Duration::from_millis(INITIAL_DELAY)).await?;
 
     let mut chapters: Vec<Chapter> = vec![];
-
-    let manga_html = Html::parse_document(&response.text().await?);
 
     let chapter_selector = create_selector("div > a")?;
     let chapter_elements = manga_html.select(&chapter_selector);
@@ -131,18 +117,12 @@ async fn get_manga_chapters(
 }
 
 pub async fn manga_from_url(manga_url: &str, max_attempts: usize) -> Result<(Manga, Vec<Chapter>)> {
-    let response = retry(
-        || async {
-            get(manga_url)
-                .await
-                .map_err(|err| MgdlError::Scrape(err.to_string()))
-        },
+    let manga_html = get_with_retry(
+        manga_url,
         max_attempts,
         Duration::from_millis(INITIAL_DELAY),
     )
     .await?;
-
-    let manga_html = Html::parse_document(&response.text().await?);
 
     let name_selector = create_selector("main > div > section > section > h1")?;
     let name_element = manga_html
@@ -263,6 +243,38 @@ where
     }
 
     Err(MgdlError::Scrape(
-        "Operation failed after max attempts\n{:?}".to_string(),
+        format!("Operation failed after max attempts {max_attempts}").to_string(),
     ))
+}
+
+async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: Duration) -> Result<Html> {
+    let html = retry(
+        || async {
+            let response = retry(
+                || async {
+                    get(url)
+                        .await
+                        .map_err(|err| MgdlError::Scrape(err.to_string()))
+                },
+                max_attempts,
+                Duration::from_millis(initial_delay),
+            )
+            .await?;
+
+            let response_text = response.text().await?;
+            let html = Html::parse_document(&response_text);
+            if html.html().contains("error code: 1015") {
+                return Err(MgdlError::Scrape(format!(
+                    "Error from rate limiting. Trying to access {}",
+                    &url
+                )));
+            }
+            return Ok(html);
+        },
+        max_attempts,
+        Duration::from_millis(initial_delay),
+    )
+    .await?;
+
+    Ok(html)
 }

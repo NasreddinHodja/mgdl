@@ -79,3 +79,16 @@ pub fn gen_progress_spinner() -> Result<ProgressBar> {
 
     Ok(spinner)
 }
+
+pub fn debug_writeln(line: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write;
+
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("./debug.log")?;
+
+    writeln!(file, "{}", line.to_string())?;
+
+    Ok(())
+}
