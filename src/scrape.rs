@@ -20,7 +20,7 @@ fn create_selector(selectors: &str) -> Result<Selector> {
 pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Result<Vec<Page>> {
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
 
-    let html = get_with_retry(&url, max_attempts, Duration::from_millis(INITIAL_DELAY)).await?;
+    let html = get_with_retry(&url, max_attempts, INITIAL_DELAY).await?;
 
     let mut page_urls: Vec<Page> = vec![];
 
@@ -62,7 +62,7 @@ async fn get_manga_chapters(
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
 
     let manga_html =
-        get_with_retry(&url, max_attempts, Duration::from_millis(INITIAL_DELAY)).await?;
+        get_with_retry(&url, max_attempts, INITIAL_DELAY).await?;
 
     let mut chapters: Vec<Chapter> = vec![];
 
@@ -120,7 +120,7 @@ pub async fn manga_from_url(manga_url: &str, max_attempts: usize) -> Result<(Man
     let manga_html = get_with_retry(
         manga_url,
         max_attempts,
-        Duration::from_millis(INITIAL_DELAY),
+        INITIAL_DELAY,
     )
     .await?;
 
@@ -201,7 +201,7 @@ pub async fn download_page(
                 .map_err(|err| MgdlError::Scrape(err.to_string()))
         },
         max_attempts,
-        Duration::from_millis(INITIAL_DELAY),
+        INITIAL_DELAY,
     )
     .await?;
 
@@ -222,7 +222,7 @@ pub async fn download_page(
 async fn retry<F, Fut, T>(
     mut operation: F,
     max_attempts: usize,
-    initial_delay: Duration,
+    initial_delay: u64,
 ) -> Result<T>
 where
     F: FnMut() -> Fut,
@@ -236,7 +236,7 @@ where
             Ok(result) => return Ok(result),
             Err(_) => {
                 attempts += 1;
-                sleep(delay.clone()).await;
+                sleep(Duration::from_millis(delay.clone())).await;
                 delay *= 2;
             }
         }
@@ -247,7 +247,7 @@ where
     ))
 }
 
-async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: Duration) -> Result<Html> {
+async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: u64) -> Result<Html> {
     let html = retry(
         || async {
             let response = retry(
@@ -257,7 +257,7 @@ async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: Duration)
                         .map_err(|err| MgdlError::Scrape(err.to_string()))
                 },
                 max_attempts,
-                Duration::from_millis(initial_delay),
+                initial_delay,
             )
             .await?;
 
@@ -272,7 +272,7 @@ async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: Duration)
             return Ok(html);
         },
         max_attempts,
-        Duration::from_millis(initial_delay),
+        initial_delay,
     )
     .await?;
 
