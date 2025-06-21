@@ -5,10 +5,8 @@ use tokio::task::JoinSet;
 use crate::{
     db,
     maybe_progress::{MaybeBar, MaybeSpinner},
-    scrape, Chapter, Manga, MgdlError,
+    scrape, Chapter, Manga, MgdlError, MgdlResult,
 };
-
-type Result<T> = std::result::Result<T, MgdlError>;
 
 const MAX_ATTEMPTS: usize = 20;
 
@@ -19,7 +17,7 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    pub fn new(manga_dir: PathBuf, db_dir: PathBuf, plain: bool) -> Result<Self> {
+    pub fn new(manga_dir: PathBuf, db_dir: PathBuf, plain: bool) -> MgdlResult<Self> {
         let db_path = db_dir.join("mgdl.db");
         let db = db::Db::new(db_path);
         db.init()?;
@@ -36,7 +34,7 @@ impl Downloader {
         })
     }
 
-    pub async fn add(&self, manga_url: &str) -> Result<(Manga, Vec<Chapter>)> {
+    pub async fn add(&self, manga_url: &str) -> MgdlResult<(Manga, Vec<Chapter>)> {
         let spinner = MaybeSpinner::new(
             self.progress.as_ref(),
             Some("Scraping manga and chapters".to_owned()),
@@ -51,7 +49,7 @@ impl Downloader {
         Ok((added_manga, chapters))
     }
 
-    pub async fn download_manga(&self, manga_url: &str) -> Result<Manga> {
+    pub async fn download_manga(&self, manga_url: &str) -> MgdlResult<Manga> {
         let (manga, chapters) = self.add(manga_url).await?;
         let manga_path = self.manga_dir.join(format!("{}", &manga.normalized_name));
 
@@ -73,7 +71,7 @@ impl Downloader {
         manga_name: &str,
         chapters: &Vec<Chapter>,
         skip_chaps: Option<&[usize]>,
-    ) -> Result<()> {
+    ) -> MgdlResult<()> {
         fs::create_dir_all(&manga_path)?;
 
         let mut join_set = JoinSet::new();
@@ -130,7 +128,7 @@ impl Downloader {
         Ok(())
     }
 
-    pub async fn update(&self, manga_name: &str) -> Result<Manga> {
+    pub async fn update(&self, manga_name: &str) -> MgdlResult<Manga> {
         let spinner = MaybeSpinner::new(
             self.progress.as_ref(),
             Some("Getting local manga data".to_owned()),
@@ -154,7 +152,7 @@ impl Downloader {
         Ok(new_manga)
     }
 
-    pub async fn update_all(&self) -> Result<()> {
+    pub async fn update_all(&self) -> MgdlResult<()> {
         let spinner = MaybeSpinner::new(self.progress.as_ref(), None)?;
         for manga in self.db.get_ongoing_manga()? {
             spinner.set_message(format!("Trying to update {}", &manga.name));
@@ -165,7 +163,7 @@ impl Downloader {
         Ok(())
     }
 
-    pub fn skip_chaps(&self, manga: &Manga) -> Result<Vec<usize>> {
+    pub fn skip_chaps(&self, manga: &Manga) -> MgdlResult<Vec<usize>> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
         let existing_chaps: Vec<usize> = fs::read_dir(&manga_path)?
             .filter_map(std::result::Result::ok)
@@ -178,7 +176,7 @@ impl Downloader {
         Ok(existing_chaps)
     }
 
-    pub fn reset_db(&self) -> Result<()> {
+    pub fn reset_db(&self) -> MgdlResult<()> {
         let spinner =
             MaybeSpinner::new(self.progress.as_ref(), Some("Dropping local DB".to_owned()))?;
 

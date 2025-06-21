@@ -3,9 +3,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use std::{path::PathBuf, time::Duration};
 
-use crate::MgdlError;
-
-type Result<T> = std::result::Result<T, MgdlError>;
+use crate::{MgdlError, MgdlResult};
 
 pub fn normalize(s: &str) -> String {
     let replacements = vec![
@@ -46,7 +44,7 @@ pub fn extract_hash(url: &str) -> Option<String> {
         .map(|m| m.as_str().to_string())
 }
 
-pub fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
+pub fn expand_tilde(path: PathBuf) -> MgdlResult<PathBuf> {
     if let Some(stripped) = path.strip_prefix("~").ok() {
         if let Some(base_dirs) = BaseDirs::new() {
             return Ok(base_dirs.home_dir().join(stripped));
@@ -60,7 +58,7 @@ pub fn expand_tilde(path: PathBuf) -> Result<PathBuf> {
     Ok(path)
 }
 
-pub fn gen_progress_bar(size: u64) -> Result<ProgressBar> {
+pub fn gen_progress_bar(size: u64) -> MgdlResult<ProgressBar> {
     let bar = ProgressBar::new(size);
     let style =
         ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
@@ -70,7 +68,7 @@ pub fn gen_progress_bar(size: u64) -> Result<ProgressBar> {
     Ok(bar)
 }
 
-pub fn gen_progress_spinner() -> Result<ProgressBar> {
+pub fn gen_progress_spinner() -> MgdlResult<ProgressBar> {
     let spinner = ProgressBar::new_spinner();
     let style = ProgressStyle::with_template("{spinner} {msg}")
         .map_err(|_| MgdlError::Scrape("Could not create spinner style".to_string()))?;

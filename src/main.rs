@@ -9,6 +9,7 @@ mod scrape;
 mod utils;
 
 use error::MgdlError;
+use error::MgdlResult;
 use models::Chapter;
 use models::Manga;
 
@@ -20,7 +21,7 @@ async fn main() {
     }
 }
 
-async fn run() -> Result<(), MgdlError> {
+async fn run() -> MgdlResult<()> {
     let args = cli::parse();
     let config = config::Config::load()?;
     let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir, true)?;

@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser};
 
-use crate::MgdlError;
+use crate::{MgdlResult};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = "Download manga rust")]
@@ -36,7 +36,7 @@ pub fn parse() -> Args {
     args
 }
 
-pub fn print_help() -> Result<(), MgdlError> {
+pub fn print_help() -> MgdlResult<()> {
     Args::command().print_help()?;
     Ok(())
 }

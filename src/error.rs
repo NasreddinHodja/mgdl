@@ -68,3 +68,5 @@ impl From<tokio::task::JoinError> for MgdlError {
         MgdlError::Join(err)
     }
 }
+
+pub type MgdlResult<T> = std::result::Result<T, MgdlError>;

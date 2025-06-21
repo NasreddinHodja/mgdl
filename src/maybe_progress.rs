@@ -1,15 +1,13 @@
 use crate::{
     utils::{gen_progress_bar, gen_progress_spinner},
-    MgdlError,
+    MgdlResult,
 };
 use indicatif::{MultiProgress, ProgressBar};
 
 pub struct MaybeSpinner(Option<ProgressBar>);
 
-type Result<T> = std::result::Result<T, MgdlError>;
-
 impl MaybeSpinner {
-    pub fn new(multi_progress: Option<&MultiProgress>, message: Option<String>) -> Result<Self> {
+    pub fn new(multi_progress: Option<&MultiProgress>, message: Option<String>) -> MgdlResult<Self> {
         let spinner = match multi_progress {
             Some(multi_progress) => {
                 let spinner = multi_progress.add(gen_progress_spinner()?);
@@ -43,7 +41,7 @@ impl MaybeSpinner {
 pub struct MaybeBar(Option<ProgressBar>);
 
 impl MaybeBar {
-    pub fn new(multi_progress: Option<&MultiProgress>, size: u64) -> Result<Self> {
+    pub fn new(multi_progress: Option<&MultiProgress>, size: u64) -> MgdlResult<Self> {
         let bar = match multi_progress {
             Some(multi_progress) => {
                 let bar = multi_progress.add(gen_progress_bar(size)?);

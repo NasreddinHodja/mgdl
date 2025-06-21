@@ -1,9 +1,7 @@
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
 
-use crate::{Manga, MgdlError};
-
-type Result<T> = std::result::Result<T, MgdlError>;
+use crate::{Manga, MgdlError, MgdlResult};
 
 pub struct Db {
     path: PathBuf,
@@ -14,7 +12,7 @@ impl Db {
         Self { path }
     }
 
-    pub fn create(&self) -> Result<()> {
+    pub fn create(&self) -> MgdlResult<()> {
         let mut conn = Connection::open(&self.path)?;
         let transaction = conn.transaction()?;
 
@@ -35,7 +33,7 @@ impl Db {
         Ok(())
     }
 
-    pub fn drop(&self) -> Result<()> {
+    pub fn drop(&self) -> MgdlResult<()> {
         let mut conn = Connection::open(&self.path)?;
         let transaction = conn.transaction()?;
 
@@ -46,13 +44,13 @@ impl Db {
         Ok(())
     }
 
-    pub fn init(&self) -> Result<()> {
+    pub fn init(&self) -> MgdlResult<()> {
         self.create()?;
 
         Ok(())
     }
 
-    pub fn upsert_manga(&self, manga: Manga) -> Result<Manga> {
+    pub fn upsert_manga(&self, manga: Manga) -> MgdlResult<Manga> {
         let conn = Connection::open(&self.path)?;
         let existing_manga = conn.query_row(
             "SELECT hash, name, normalized_name, authors, status
@@ -95,13 +93,13 @@ impl Db {
         Ok(manga)
     }
 
-    pub fn add_manga(&self, manga: Manga) -> Result<Manga> {
+    pub fn add_manga(&self, manga: Manga) -> MgdlResult<Manga> {
         let upserted_manga = self.upsert_manga(manga)?;
 
         Ok(upserted_manga)
     }
 
-    pub fn get_manga_by_normalized_name(&self, normalized_name: &str) -> Result<Manga> {
+    pub fn get_manga_by_normalized_name(&self, normalized_name: &str) -> MgdlResult<Manga> {
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("select * from mangas where normalized_name = ?")?;
 
@@ -127,7 +125,7 @@ impl Db {
         )))
     }
 
-    pub fn get_ongoing_manga(&self) -> Result<Vec<Manga>> {
+    pub fn get_ongoing_manga(&self) -> MgdlResult<Vec<Manga>> {
         let conn = Connection::open(&self.path)?;
         let mut stmt = conn.prepare("select * from mangas where status = 'Ongoing'")?;
 

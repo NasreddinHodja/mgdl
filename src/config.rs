@@ -3,9 +3,7 @@ use serde::Deserialize;
 use std::{fs, path::PathBuf};
 use toml;
 
-use crate::{utils::expand_tilde, MgdlError};
-
-pub type Result<T> = std::result::Result<T, MgdlError>;
+use crate::{utils::expand_tilde, MgdlError, MgdlResult};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -19,7 +17,7 @@ pub struct MgdlConfig {
 }
 
 impl Config {
-    pub fn load() -> Result<MgdlConfig> {
+    pub fn load() -> MgdlResult<MgdlConfig> {
         let project_dirs = ProjectDirs::from("com", "NasreddinHodja", "Mgdl")
             .ok_or_else(|| MgdlError::Config("Could not open config dirs.".to_string()))?;
 

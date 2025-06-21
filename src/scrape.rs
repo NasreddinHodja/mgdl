@@ -6,18 +6,16 @@ use tokio::time::sleep;
 use crate::{
     models::{Chapter, Manga, Page},
     utils::{extract_hash, normalize},
-    MgdlError,
+    MgdlError, MgdlResult,
 };
 
 const INITIAL_DELAY: u64 = 300;
 
-type Result<T> = std::result::Result<T, MgdlError>;
-
-fn create_selector(selectors: &str) -> Result<Selector> {
+fn create_selector(selectors: &str) -> MgdlResult<Selector> {
     Selector::parse(selectors).map_err(|err| MgdlError::Scrape(err.to_string()))
 }
 
-pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> Result<Vec<Page>> {
+pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Page>> {
     let url = format!("https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip", chapter_hash);
 
     let html = get_with_retry(&url, max_attempts, INITIAL_DELAY).await?;
@@ -58,11 +56,10 @@ async fn get_manga_chapters(
     manga_hash: &str,
     manga_id: &str,
     max_attempts: usize,
-) -> Result<Vec<Chapter>> {
+) -> MgdlResult<Vec<Chapter>> {
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
 
-    let manga_html =
-        get_with_retry(&url, max_attempts, INITIAL_DELAY).await?;
+    let manga_html = get_with_retry(&url, max_attempts, INITIAL_DELAY).await?;
 
     let mut chapters: Vec<Chapter> = vec![];
 
@@ -116,13 +113,11 @@ async fn get_manga_chapters(
     Ok(chapters)
 }
 
-pub async fn manga_from_url(manga_url: &str, max_attempts: usize) -> Result<(Manga, Vec<Chapter>)> {
-    let manga_html = get_with_retry(
-        manga_url,
-        max_attempts,
-        INITIAL_DELAY,
-    )
-    .await?;
+pub async fn manga_from_url(
+    manga_url: &str,
+    max_attempts: usize,
+) -> MgdlResult<(Manga, Vec<Chapter>)> {
+    let manga_html = get_with_retry(manga_url, max_attempts, INITIAL_DELAY).await?;
 
     let name_selector = create_selector("main > div > section > section > h1")?;
     let name_element = manga_html
@@ -193,7 +188,7 @@ pub async fn download_page(
     chapter_path: PathBuf,
     page_number: usize,
     max_attempts: usize,
-) -> Result<()> {
+) -> MgdlResult<()> {
     let response = retry(
         || async {
             get(&page_url)
@@ -223,10 +218,10 @@ async fn retry<F, Fut, T>(
     mut operation: F,
     max_attempts: usize,
     initial_delay: u64,
-) -> Result<T>
+) -> MgdlResult<T>
 where
     F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<T>>,
+    Fut: std::future::Future<Output = MgdlResult<T>>,
 {
     let mut attempts = 0;
     let mut delay = initial_delay;
@@ -247,7 +242,7 @@ where
     ))
 }
 
-async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: u64) -> Result<Html> {
+async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: u64) -> MgdlResult<Html> {
     let html = retry(
         || async {
             let response = retry(
