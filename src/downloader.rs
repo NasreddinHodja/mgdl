@@ -1,10 +1,9 @@
-use indicatif::MultiProgress;
 use std::{fs, path::PathBuf};
 use tokio::task::JoinSet;
 
 use crate::{
     db,
-    maybe_progress::{MaybeBar, MaybeSpinner},
+    logger::{LogMode, Logger},
     scrape, Chapter, Manga, MgdlError, MgdlResult,
 };
 
@@ -13,39 +12,36 @@ const MAX_ATTEMPTS: usize = 20;
 pub struct Downloader {
     db: db::Db,
     manga_dir: PathBuf,
-    progress: Option<MultiProgress>,
+    logger: Logger,
 }
 
 impl Downloader {
-    pub fn new(manga_dir: PathBuf, db_dir: PathBuf, plain: bool) -> MgdlResult<Self> {
+    pub fn new(manga_dir: PathBuf, db_dir: PathBuf, log_mode: LogMode) -> MgdlResult<Self> {
         let db_path = db_dir.join("mgdl.db");
         let db = db::Db::new(db_path);
+
         db.init()?;
 
-        let mut progress = None;
-        if !plain {
-            progress = Some(MultiProgress::new());
-        }
+        let logger = Logger::new(Some(log_mode));
 
         Ok(Self {
             db,
             manga_dir: manga_dir,
-            progress,
+            logger,
         })
     }
 
     pub async fn add(&self, manga_url: &str) -> MgdlResult<(Manga, Vec<Chapter>)> {
-        let spinner = MaybeSpinner::new(
-            self.progress.as_ref(),
-            Some("Scraping manga and chapters".to_owned()),
-        )?;
+        let spinner = self
+            .logger
+            .add_spinner(Some("Scraping manga and chapters".to_owned()))?;
 
         let (manga, chapters) = scrape::manga_from_url(manga_url, MAX_ATTEMPTS).await?;
 
         spinner.set_message(format!("Adding manga {}", &manga.name));
         let added_manga = self.db.add_manga(manga)?;
 
-        spinner.finish_and_clear(self.progress.as_ref());
+        self.logger.finish_spinner(spinner);
         Ok((added_manga, chapters))
     }
 
@@ -53,15 +49,14 @@ impl Downloader {
         let (manga, chapters) = self.add(manga_url).await?;
         let manga_path = self.manga_dir.join(format!("{}", &manga.normalized_name));
 
-        let spinner = MaybeSpinner::new(
-            self.progress.as_ref(),
-            Some(format!("Downloading {}", &manga.name)),
-        )?;
+        let spinner = self
+            .logger
+            .add_spinner(Some(format!("Downloading {}", &manga.name)))?;
 
         self.download_chapters(&manga_path, &manga.name, &chapters, None)
             .await?;
 
-        spinner.finish_and_clear(self.progress.as_ref());
+        self.logger.finish_spinner(spinner);
         Ok(manga)
     }
 
@@ -76,7 +71,7 @@ impl Downloader {
 
         let mut join_set = JoinSet::new();
 
-        let progress_bar = MaybeBar::new(self.progress.as_ref(), chapters.len() as u64)?;
+        let progress_bar = self.logger.add_bar(chapters.len() as u64)?;
         progress_bar.set_prefix(format!("Locating chapters and pages"));
         for chapter in chapters {
             let chapter_number = chapter
@@ -115,24 +110,23 @@ impl Downloader {
                 manga_name, &chapter.number
             ));
         }
-        progress_bar.finish_and_clear(self.progress.as_ref());
+        self.logger.finish_bar(progress_bar);
 
-        let progress_bar = MaybeBar::new(self.progress.as_ref(), join_set.len() as u64)?;
+        let progress_bar = self.logger.add_bar(join_set.len() as u64)?;
         progress_bar.set_prefix(format!("Downloading pages"));
         while let Some(res) = join_set.join_next().await {
             let _ = res?;
             progress_bar.inc(1);
         }
-        progress_bar.finish_and_clear(self.progress.as_ref());
+        self.logger.finish_bar(progress_bar);
 
         Ok(())
     }
 
     pub async fn update(&self, manga_name: &str) -> MgdlResult<Manga> {
-        let spinner = MaybeSpinner::new(
-            self.progress.as_ref(),
-            Some("Getting local manga data".to_owned()),
-        )?;
+        let spinner = self
+            .logger
+            .add_spinner(Some("Getting local manga data".to_owned()))?;
 
         let manga = self.db.get_manga_by_normalized_name(manga_name)?;
         let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
@@ -148,18 +142,19 @@ impl Downloader {
         self.download_chapters(&manga_path, &manga.name, &chapters, Some(&skip_chaps))
             .await?;
 
-        spinner.finish_and_clear(self.progress.as_ref());
+        self.logger.finish_spinner(spinner);
         Ok(new_manga)
     }
 
     pub async fn update_all(&self) -> MgdlResult<()> {
-        let spinner = MaybeSpinner::new(self.progress.as_ref(), None)?;
+        let spinner = self.logger.add_spinner(None)?;
+
         for manga in self.db.get_ongoing_manga()? {
             spinner.set_message(format!("Trying to update {}", &manga.name));
             self.update(&manga.normalized_name).await?;
         }
 
-        spinner.finish_and_clear(self.progress.as_ref());
+        self.logger.finish_spinner(spinner);
         Ok(())
     }
 
@@ -177,12 +172,13 @@ impl Downloader {
     }
 
     pub fn reset_db(&self) -> MgdlResult<()> {
-        let spinner =
-            MaybeSpinner::new(self.progress.as_ref(), Some("Dropping local DB".to_owned()))?;
+        let spinner = self
+            .logger
+            .add_spinner(Some("Dropping local DB".to_owned()))?;
 
         self.db.drop()?;
 
-        spinner.finish_and_clear(self.progress.as_ref());
+        self.logger.finish_spinner(spinner);
         Ok(())
     }
 }

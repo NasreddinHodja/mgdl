@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser};
 
-use crate::{MgdlResult};
+use crate::{logger::LogMode, MgdlResult};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = "Download manga rust")]
@@ -21,9 +21,9 @@ pub struct Args {
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,
 
-    /// No output (no loaders)
-    #[arg(short, long)]
-    pub quiet: bool,
+    /// Logging mode: normal, plain, or quiet
+    #[arg(long, value_enum, default_value = "normal")]
+    pub log: LogMode,
 }
 
 pub fn parse() -> Args {

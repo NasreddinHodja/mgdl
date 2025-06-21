@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod downloader;
 mod error;
+mod logger;
 mod maybe_progress;
 mod models;
 mod scrape;
@@ -24,7 +25,7 @@ async fn main() {
 async fn run() -> MgdlResult<()> {
     let args = cli::parse();
     let config = config::Config::load()?;
-    let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir, true)?;
+    let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir, args.log)?;
 
     if args.reset {
         if let Err(err) = dldr.reset_db() {

@@ -1,80 +1,137 @@
 use crate::{
+    logger::LogMode,
     utils::{gen_progress_bar, gen_progress_spinner},
     MgdlResult,
 };
 use indicatif::{MultiProgress, ProgressBar};
 
-pub struct MaybeSpinner(Option<ProgressBar>);
+pub struct MaybeSpinner {
+    inner: Option<ProgressBar>,
+    mode: LogMode,
+}
 
 impl MaybeSpinner {
-    pub fn new(multi_progress: Option<&MultiProgress>, message: Option<String>) -> MgdlResult<Self> {
-        let spinner = match multi_progress {
-            Some(multi_progress) => {
-                let spinner = multi_progress.add(gen_progress_spinner()?);
-                if let Some(message) = message {
-                    spinner.set_message(message);
-                }
-                Some(spinner)
+    pub fn new(
+        multi_progress: Option<&MultiProgress>,
+        message: Option<String>,
+        log_mode: LogMode,
+    ) -> MgdlResult<Self> {
+        let inner = if log_mode == LogMode::Normal {
+            let spinner = gen_progress_spinner()?;
+            let spinner = match multi_progress {
+                Some(mp) => mp.add(spinner),
+                None => spinner,
+            };
+
+            if let Some(msg) = &message {
+                spinner.set_message(msg.clone());
             }
-            None => None,
+
+            Some(spinner)
+        } else {
+            if let Some(msg) = &message {
+                if log_mode == LogMode::Plain {
+                    println!("{msg}");
+                }
+            }
+            None
         };
-        Ok(Self(spinner))
+
+        Ok(Self {
+            inner,
+            mode: log_mode,
+        })
     }
 
     pub fn set_message(&self, msg: String) {
-        if let Some(s) = &self.0 {
-            s.set_message(msg);
+        match self.mode {
+            LogMode::Normal => {
+                if let Some(s) = &self.inner {
+                    s.set_message(msg);
+                }
+            }
+            LogMode::Plain => {
+                println!("{}", msg);
+            }
+            LogMode::Quiet => {
+                // do nothing
+            }
         }
     }
 
     pub fn finish_and_clear(self, multi_progress: Option<&MultiProgress>) {
-        let Some(spinner) = self.0 else { return };
-        let Some(multi_progress) = multi_progress else {
-            return;
-        };
-
-        spinner.finish_and_clear();
-        multi_progress.remove(&spinner);
+        if let Some(bar) = self.inner {
+            if self.mode == LogMode::Normal {
+                if let Some(mp) = multi_progress {
+                    bar.finish_and_clear();
+                    mp.remove(&bar);
+                }
+            }
+        }
     }
 }
 
-pub struct MaybeBar(Option<ProgressBar>);
+pub struct MaybeBar {
+    inner: Option<ProgressBar>,
+    mode: LogMode,
+}
 
 impl MaybeBar {
-    pub fn new(multi_progress: Option<&MultiProgress>, size: u64) -> MgdlResult<Self> {
-        let bar = match multi_progress {
-            Some(multi_progress) => {
-                let bar = multi_progress.add(gen_progress_bar(size)?);
-                Some(bar)
-            }
-            None => None,
+    pub fn new(
+        multi_progress: Option<&MultiProgress>,
+        size: u64,
+        log_mode: LogMode,
+    ) -> MgdlResult<Self> {
+        let inner = if log_mode == LogMode::Normal {
+            let bar = gen_progress_bar(size)?;
+            Some(match multi_progress {
+                Some(mp) => mp.add(bar),
+                None => bar,
+            })
+        } else {
+            None
         };
-        Ok(Self(bar))
+
+        Ok(Self {
+            inner,
+            mode: log_mode,
+        })
     }
 
     pub fn set_prefix(&self, msg: String) {
-        if let Some(bar) = &self.0 {
-            bar.set_prefix(msg)
+        if let Some(bar) = &self.inner {
+            bar.set_prefix(msg);
+        } else if self.mode == LogMode::Plain {
+            print!("{msg} ");
         }
     }
 
     pub fn inc(&self, delta: u64) {
-        if let Some(bar) = &self.0 {
+        if let Some(bar) = &self.inner {
             bar.inc(delta);
         }
     }
 
     pub fn println(&self, msg: String) {
-        if let Some(bar) = &self.0 {
-            bar.println(msg);
+        match self.mode {
+            LogMode::Normal => {
+                if let Some(bar) = &self.inner {
+                    bar.println(msg);
+                }
+            }
+            LogMode::Plain => println!("{msg}"),
+            LogMode::Quiet => {}
         }
     }
 
-    pub fn finish_and_clear(self, progress: Option<&MultiProgress>) {
-        let Some(bar) = self.0 else { return };
-        let Some(progress) = progress else { return };
-
-        bar.finish_and_clear();
-        progress.remove(&bar);
+    pub fn finish_and_clear(self, multi_progress: Option<&MultiProgress>) {
+        if let Some(bar) = self.inner {
+            if self.mode == LogMode::Normal {
+                if let Some(mp) = multi_progress {
+                    bar.finish_and_clear();
+                    mp.remove(&bar);
+                }
+            }
+        }
     }
 }
