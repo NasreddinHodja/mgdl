@@ -20,6 +20,10 @@ pub struct Args {
     /// Reset local DB
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,
+
+    /// No output (no loaders)
+    #[arg(short, long)]
+    pub quiet: bool,
 }
 
 pub fn parse() -> Args {
