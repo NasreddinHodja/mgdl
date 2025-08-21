@@ -149,12 +149,34 @@ impl Downloader {
     pub async fn update_all(&self) -> MgdlResult<()> {
         let spinner = self.logger.add_spinner(None)?;
 
+        spinner.set_message("Cleaning up missing manga directories".to_owned());
+        self.cleanup_missing_manga_dirs()?;
+
         for manga in self.db.get_ongoing_manga()? {
             spinner.set_message(format!("Trying to update {}", &manga.name));
             self.update(&manga.normalized_name).await?;
         }
 
         self.logger.finish_spinner(spinner);
+        Ok(())
+    }
+
+    pub fn cleanup_missing_manga_dirs(&self) -> MgdlResult<()> {
+        let ongoing_manga = self.db.get_ongoing_manga()?;
+        let mut deleted_count = 0;
+
+        for manga in ongoing_manga {
+            let manga_path = self.manga_dir.join(&manga.normalized_name);
+            if !manga_path.exists() {
+                self.db.delete_manga_by_normalized_name(&manga.normalized_name)?;
+                deleted_count += 1;
+            }
+        }
+
+        if deleted_count > 0 {
+            eprintln!("Cleaned up {} manga entries with missing directories", deleted_count);
+        }
+
         Ok(())
     }
 

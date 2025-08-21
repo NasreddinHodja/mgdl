@@ -143,4 +143,13 @@ impl Db {
 
         Ok(mangas)
     }
+
+    pub fn delete_manga_by_normalized_name(&self, normalized_name: &str) -> MgdlResult<()> {
+        let conn = Connection::open(&self.path)?;
+        conn.execute(
+            "DELETE FROM mangas WHERE normalized_name = ?",
+            params![normalized_name],
+        )?;
+        Ok(())
+    }
 }
