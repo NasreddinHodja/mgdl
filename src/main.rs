@@ -4,7 +4,6 @@ mod db;
 mod downloader;
 mod error;
 mod logger;
-mod maybe_progress;
 mod models;
 mod scrape;
 mod utils;

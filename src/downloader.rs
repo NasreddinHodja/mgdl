@@ -26,7 +26,7 @@ impl Downloader {
 
         Ok(Self {
             db,
-            manga_dir: manga_dir,
+            manga_dir,
             logger,
         })
     }
@@ -168,13 +168,17 @@ impl Downloader {
         for manga in ongoing_manga {
             let manga_path = self.manga_dir.join(&manga.normalized_name);
             if !manga_path.exists() {
-                self.db.delete_manga_by_normalized_name(&manga.normalized_name)?;
+                self.db
+                    .delete_manga_by_normalized_name(&manga.normalized_name)?;
                 deleted_count += 1;
             }
         }
 
         if deleted_count > 0 {
-            eprintln!("Cleaned up {} manga entries with missing directories", deleted_count);
+            eprintln!(
+                "Cleaned up {} manga entries with missing directories",
+                deleted_count
+            );
         }
 
         Ok(())

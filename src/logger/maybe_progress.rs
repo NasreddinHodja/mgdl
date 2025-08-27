@@ -3,6 +3,7 @@ use crate::{
     utils::{gen_progress_bar, gen_progress_spinner},
     MgdlResult,
 };
+
 use indicatif::{MultiProgress, ProgressBar};
 
 pub struct MaybeSpinner {
@@ -16,7 +17,7 @@ impl MaybeSpinner {
         message: Option<String>,
         log_mode: LogMode,
     ) -> MgdlResult<Self> {
-        let inner = if log_mode == LogMode::Normal {
+        let inner = if log_mode == LogMode::Fancy {
             let spinner = gen_progress_spinner()?;
             let spinner = match multi_progress {
                 Some(mp) => mp.add(spinner),
@@ -31,7 +32,7 @@ impl MaybeSpinner {
         } else {
             if let Some(msg) = &message {
                 if log_mode == LogMode::Plain {
-                    println!("{msg}");
+                    println!("[INFO] {msg}");
                 }
             }
             None
@@ -45,23 +46,21 @@ impl MaybeSpinner {
 
     pub fn set_message(&self, msg: String) {
         match self.mode {
-            LogMode::Normal => {
+            LogMode::Fancy => {
                 if let Some(s) = &self.inner {
                     s.set_message(msg);
                 }
             }
             LogMode::Plain => {
-                println!("{}", msg);
+                println!("[INFO] {}", msg);
             }
-            LogMode::Quiet => {
-                // do nothing
-            }
+            LogMode::Quiet => {}
         }
     }
 
     pub fn finish_and_clear(self, multi_progress: Option<&MultiProgress>) {
         if let Some(bar) = self.inner {
-            if self.mode == LogMode::Normal {
+            if self.mode == LogMode::Fancy {
                 if let Some(mp) = multi_progress {
                     bar.finish_and_clear();
                     mp.remove(&bar);
@@ -82,7 +81,7 @@ impl MaybeBar {
         size: u64,
         log_mode: LogMode,
     ) -> MgdlResult<Self> {
-        let inner = if log_mode == LogMode::Normal {
+        let inner = if log_mode == LogMode::Fancy {
             let bar = gen_progress_bar(size)?;
             Some(match multi_progress {
                 Some(mp) => mp.add(bar),
@@ -102,7 +101,7 @@ impl MaybeBar {
         if let Some(bar) = &self.inner {
             bar.set_prefix(msg);
         } else if self.mode == LogMode::Plain {
-            print!("{msg} ");
+            println!("[INFO] {msg}");
         }
     }
 
@@ -114,19 +113,19 @@ impl MaybeBar {
 
     pub fn println(&self, msg: String) {
         match self.mode {
-            LogMode::Normal => {
+            LogMode::Fancy => {
                 if let Some(bar) = &self.inner {
                     bar.println(msg);
                 }
             }
-            LogMode::Plain => println!("{msg}"),
+            LogMode::Plain => println!("[INFO] {msg}"),
             LogMode::Quiet => {}
         }
     }
 
     pub fn finish_and_clear(self, multi_progress: Option<&MultiProgress>) {
         if let Some(bar) = self.inner {
-            if self.mode == LogMode::Normal {
+            if self.mode == LogMode::Fancy {
                 if let Some(mp) = multi_progress {
                     bar.finish_and_clear();
                     mp.remove(&bar);

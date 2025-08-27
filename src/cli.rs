@@ -21,8 +21,8 @@ pub struct Args {
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,
 
-    /// Logging mode: normal, plain, or quiet
-    #[arg(long, value_enum, default_value = "normal")]
+    /// Logging mode: plain, fancy, or quiet
+    #[arg(short, long, value_enum, default_value = "plain")]
     pub log: LogMode,
 }
 
