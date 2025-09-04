@@ -100,8 +100,6 @@ impl MaybeBar {
     pub fn set_prefix(&self, msg: String) {
         if let Some(bar) = &self.inner {
             bar.set_prefix(msg);
-        } else if self.mode == LogMode::Plain {
-            println!("[INFO] {msg}");
         }
     }
 
