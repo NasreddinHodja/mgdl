@@ -105,7 +105,7 @@ impl Downloader {
                 ));
             }
             progress_bar.inc(1);
-            progress_bar.println(format!(
+            progress_bar.success(format!(
                 "Downloaded \"{}\" - Chapter {}",
                 manga_name, &chapter.number
             ));

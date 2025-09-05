@@ -51,10 +51,7 @@ impl MaybeSpinner {
                     s.set_message(msg);
                 }
             }
-            LogMode::Plain => {
-                println!("[INFO] {}", msg);
-            }
-            LogMode::Quiet => {}
+            LogMode::Quiet | LogMode::Plain => {}
         }
     }
 
@@ -109,14 +106,14 @@ impl MaybeBar {
         }
     }
 
-    pub fn println(&self, msg: String) {
+    pub fn success(&self, msg: String) {
         match self.mode {
             LogMode::Fancy => {
                 if let Some(bar) = &self.inner {
-                    bar.println(msg);
+                    bar.println(format!("[SUCCESS] {msg}"));
                 }
             }
-            LogMode::Plain => println!("[INFO] {msg}"),
+            LogMode::Plain => println!("[SUCCESS] {msg}"),
             LogMode::Quiet => {}
         }
     }
