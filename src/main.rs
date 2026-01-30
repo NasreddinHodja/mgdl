@@ -53,6 +53,10 @@ async fn run() -> MgdlResult<()> {
                 }
             };
         }
+    } else if let Some(manga_url) = args.scrape {
+        if let Err(err) = scrape::scrape_to_csv(&manga_url, None).await {
+            eprintln!("{}", err);
+        }
     } else {
         if let Err(err) = cli::print_help() {
             eprintln!("{}", err);

@@ -2,6 +2,8 @@ use reqwest::get;
 use scraper::{Html, Selector};
 use std::{fs, io::Write, path::PathBuf, time::Duration};
 use tokio::time::sleep;
+use uuid::Uuid;
+use csv::Writer;
 
 use crate::{
     models::{Chapter, Manga, Page},
@@ -42,7 +44,7 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> MgdlR
         page_urls.push(Page { url, number });
     }
 
-    if page_urls.len() == 0 {
+    if page_urls.is_empty() {
         Err(MgdlError::Scrape(format!(
             "Could not find pages for chapter. \nhtml = {:#?}",
             html
@@ -231,7 +233,7 @@ where
             Ok(result) => return Ok(result),
             Err(_) => {
                 attempts += 1;
-                sleep(Duration::from_millis(delay.clone())).await;
+                sleep(Duration::from_millis(delay)).await;
                 delay *= 2;
             }
         }
@@ -272,4 +274,63 @@ async fn get_with_retry(url: &str, max_attempts: usize, initial_delay: u64) -> M
     .await?;
 
     Ok(html)
+}
+
+pub async fn scrape_to_csv(
+    manga_url: &str,
+    max_attempts: Option<usize>,
+) -> MgdlResult<()> {
+    let max_attempts = max_attempts.unwrap_or(10);
+
+    let (manga, chapters) = manga_from_url(manga_url, max_attempts).await?;
+
+    let manga_id = Uuid::new_v4().to_string();
+
+    let mut manga_w = Writer::from_path("manga.csv")
+        .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+    let mut page_w = Writer::from_path("page.csv")
+        .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+
+    manga_w
+        .write_record(&["id", "hash", "name", "normalized_name", "authors", "status"])
+        .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+
+    page_w
+        .write_record(&["id", "manga_id", "chapter_number", "number", "url"])
+        .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+
+    manga_w
+        .write_record(&[
+            &manga_id,
+            &manga.hash,
+            &manga.name,
+            &manga.normalized_name,
+            &manga.authors,
+            &manga.status,
+        ])
+        .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+
+    for chapter in chapters {
+        let pages = get_chapter_pages(&chapter.hash, max_attempts).await?;
+
+        for page in pages {
+            let page_id = Uuid::new_v4().to_string();
+            let page_number_str = page.number.to_string();
+
+            page_w
+                .write_record(&[
+                    &page_id,
+                    &manga_id,
+                    &chapter.number,
+                    &page_number_str,
+                    &page.url,
+                ])
+                .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+        }
+    }
+
+    manga_w.flush().map_err(|e| MgdlError::Scrape(e.to_string()))?;
+    page_w.flush().map_err(|e| MgdlError::Scrape(e.to_string()))?;
+
+    Ok(())
 }

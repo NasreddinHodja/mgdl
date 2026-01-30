@@ -22,7 +22,7 @@ impl Downloader {
 
         db.init()?;
 
-        let logger = Logger::new(Some(log_mode));
+        let logger = Logger::new(log_mode);
 
         Ok(Self {
             db,

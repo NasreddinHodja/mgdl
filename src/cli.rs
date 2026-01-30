@@ -17,6 +17,10 @@ pub struct Args {
     #[arg(short, long)]
     pub update: Option<Option<String>>,
 
+    /// URL of manga to scrape
+    #[arg(short, long)]
+    pub scrape: Option<String>,
+
     /// Reset local DB
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,
