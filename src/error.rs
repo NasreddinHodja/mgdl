@@ -35,7 +35,8 @@ define_errors! {
     wrap Reqwest(reqwest::Error)        => "Reqwest error",
     wrap Rusqlite(rusqlite::Error)      => "Rusqlite error",
     wrap Parse(std::num::ParseIntError) => "Parse error",
-    wrap Join(tokio::task::JoinError)   => "Join error";
+    wrap Join(tokio::task::JoinError)   => "Join error",
+    wrap Csv(csv::Error)               => "CSV error";
     msg Config     => "Config error",
     msg Db         => "DB error",
     msg Scrape     => "Scrape error",

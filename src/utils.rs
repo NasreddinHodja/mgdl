@@ -1,57 +1,60 @@
 use directories::BaseDirs;
-use regex::Regex;
 use std::path::PathBuf;
 
-use crate::{MgdlError, MgdlResult};
+use crate::error::{MgdlError, MgdlResult};
 
 pub fn normalize(s: &str) -> String {
-    let replacements = vec![
-        (Regex::new(r"[áàâãä]").unwrap(), "a"),
-        (Regex::new(r"[éèêë]").unwrap(), "e"),
-        (Regex::new(r"[íìîï]").unwrap(), "i"),
-        (Regex::new(r"[óòôõö]").unwrap(), "o"),
-        (Regex::new(r"[úùûü]").unwrap(), "u"),
-        (Regex::new(r"[ç]").unwrap(), "c"),
-        (Regex::new(r"[ñ]").unwrap(), "n"),
-        (Regex::new(r"[ýÿ]").unwrap(), "y"),
-        (Regex::new(r"[ÁÀÂÃÄ]").unwrap(), "A"),
-        (Regex::new(r"[ÉÈÊË]").unwrap(), "E"),
-        (Regex::new(r"[ÍÌÎÏ]").unwrap(), "I"),
-        (Regex::new(r"[ÓÒÔÕÖ]").unwrap(), "O"),
-        (Regex::new(r"[ÚÙÛÜ]").unwrap(), "U"),
-        (Regex::new(r"[Ç]").unwrap(), "C"),
-        (Regex::new(r"[Ñ]").unwrap(), "N"),
-        (Regex::new(r"[Ý]").unwrap(), "Y"),
-    ];
+    let mut out = String::with_capacity(s.len());
 
-    let mut s = s.to_string();
-
-    for (re, replacement) in replacements.iter() {
-        s = re.replace_all(&s, *replacement).to_string();
+    for c in s.chars() {
+        match c {
+            'á' | 'à' | 'â' | 'ã' | 'ä' => out.push('a'),
+            'é' | 'è' | 'ê' | 'ë' => out.push('e'),
+            'í' | 'ì' | 'î' | 'ï' => out.push('i'),
+            'ó' | 'ò' | 'ô' | 'õ' | 'ö' => out.push('o'),
+            'ú' | 'ù' | 'û' | 'ü' => out.push('u'),
+            'ç' => out.push('c'),
+            'ñ' => out.push('n'),
+            'ý' | 'ÿ' => out.push('y'),
+            'Á' | 'À' | 'Â' | 'Ã' | 'Ä' => out.push('A'),
+            'É' | 'È' | 'Ê' | 'Ë' => out.push('E'),
+            'Í' | 'Ì' | 'Î' | 'Ï' => out.push('I'),
+            'Ó' | 'Ò' | 'Ô' | 'Õ' | 'Ö' => out.push('O'),
+            'Ú' | 'Ù' | 'Û' | 'Ü' => out.push('U'),
+            'Ç' => out.push('C'),
+            'Ñ' => out.push('N'),
+            'Ý' => out.push('Y'),
+            c if c.is_ascii_alphanumeric() => out.push(c),
+            _ => out.push('_'),
+        }
     }
 
-    let re = Regex::new(r"[^a-zA-Z0-9]+").unwrap();
-    s = re.replace_all(&s, "_").to_string();
+    // Collapse consecutive underscores and trim them from edges
+    let collapsed: String = out
+        .split('_')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("_");
 
-    s.trim_matches('_').to_lowercase()
+    collapsed.to_lowercase()
 }
 
 pub fn extract_hash(url: &str) -> Option<String> {
-    let re = Regex::new(r"/series/([^/]+)(?:/|$)").ok()?;
-    re.captures(url)
-        .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str().to_string())
+    let path = url.trim_end_matches('/');
+    let after_series = path.split("/series/").nth(1)?;
+    let hash = after_series.split('/').next()?;
+    if hash.is_empty() {
+        return None;
+    }
+    Some(hash.to_string())
 }
 
 pub fn expand_tilde(path: PathBuf) -> MgdlResult<PathBuf> {
-    if let Some(stripped) = path.strip_prefix("~").ok() {
-        if let Some(base_dirs) = BaseDirs::new() {
-            return Ok(base_dirs.home_dir().join(stripped));
-        } else {
-            return Err(MgdlError::Config(
-                "Could not determine home directory".to_string(),
-            ));
-        }
+    if let Ok(stripped) = path.strip_prefix("~") {
+        let base_dirs = BaseDirs::new().ok_or_else(|| {
+            MgdlError::Config("Could not determine home directory".to_string())
+        })?;
+        return Ok(base_dirs.home_dir().join(stripped));
     }
 
     Ok(path)

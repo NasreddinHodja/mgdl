@@ -2,7 +2,7 @@ use clap::ValueEnum;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::time::Duration;
 
-use crate::{MgdlError, MgdlResult};
+use crate::error::{MgdlError, MgdlResult};
 
 #[derive(Clone, Copy, ValueEnum, Debug, PartialEq)]
 pub enum LogMode {

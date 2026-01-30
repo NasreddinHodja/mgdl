@@ -4,15 +4,13 @@ use std::fmt;
 pub struct Chapter {
     pub hash: String,
     pub number: String,
-    pub _manga: String,
 }
 
 impl Chapter {
-    pub fn new(hash: &str, number: &str, manga: &str) -> Self {
+    pub fn new(hash: &str, number: &str) -> Self {
         Self {
             hash: hash.to_string(),
             number: number.to_string(),
-            _manga: manga.to_string(),
         }
     }
 }

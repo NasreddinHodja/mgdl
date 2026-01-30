@@ -1,152 +1,104 @@
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
 
-use crate::{Manga, MgdlError, MgdlResult};
+use crate::{models::Manga, error::{MgdlError, MgdlResult}};
 
 pub struct Db {
-    path: PathBuf,
+    conn: Connection,
+}
+
+fn manga_from_row(row: &rusqlite::Row) -> rusqlite::Result<Manga> {
+    Ok(Manga {
+        hash: row.get(0)?,
+        name: row.get(1)?,
+        normalized_name: row.get(2)?,
+        authors: row.get(3)?,
+        status: row.get(4)?,
+    })
 }
 
 impl Db {
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
-    }
-
-    pub fn create(&self) -> MgdlResult<()> {
-        let mut conn = Connection::open(&self.path)?;
-        let transaction = conn.transaction()?;
-
-        transaction.execute(
-            "
-                create table if not exists mangas (
-                    hash text not null primary key,
-                    name text not null unique,
-                    normalized_name text unique,
-                    authors text not null,
-                    status text not null
-                );",
+    pub fn new(path: PathBuf) -> MgdlResult<Self> {
+        let conn = Connection::open(&path)?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS mangas (
+                hash TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                normalized_name TEXT UNIQUE,
+                authors TEXT NOT NULL,
+                status TEXT NOT NULL
+            )",
             [],
         )?;
-
-        transaction.commit()?;
-
-        Ok(())
+        Ok(Self { conn })
     }
 
-    pub fn drop(&self) -> MgdlResult<()> {
-        let mut conn = Connection::open(&self.path)?;
-        let transaction = conn.transaction()?;
-
-        transaction.execute("drop table if exists mangas", ())?;
-
-        transaction.commit()?;
-
-        Ok(())
-    }
-
-    pub fn init(&self) -> MgdlResult<()> {
-        self.create()?;
-
+    pub fn drop_table(&self) -> MgdlResult<()> {
+        self.conn.execute("DROP TABLE IF EXISTS mangas", [])?;
         Ok(())
     }
 
     pub fn upsert_manga(&self, manga: Manga) -> MgdlResult<Manga> {
-        let conn = Connection::open(&self.path)?;
-        let existing_manga = conn.query_row(
+        let existing = self.conn.query_row(
             "SELECT hash, name, normalized_name, authors, status
-            FROM mangas
-            WHERE name = ? AND authors = ?",
-            (&manga.name, &manga.authors),
-            |row| {
-                Ok(Manga {
-                    hash: row.get(1)?,
-                    name: row.get(2)?,
-                    normalized_name: row.get(3)?,
-                    authors: row.get(4)?,
-                    status: row.get(5)?,
-                })
-            },
+             FROM mangas WHERE name = ? AND authors = ?",
+            params![manga.name, manga.authors],
+            manga_from_row,
         );
 
-        if let Ok(found_manga) = existing_manga {
-            return Ok(found_manga);
+        if let Ok(found) = existing {
+            return Ok(found);
         }
 
-        conn.execute(
-            "
-            insert into mangas (hash, name, normalized_name, authors, status)
-            values (?, ?, ?, ?, ?)
-            on conflict(name)
-            do update set hash = excluded.hash,
+        self.conn.execute(
+            "INSERT INTO mangas (hash, name, normalized_name, authors, status)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(name) DO UPDATE SET
+                hash = excluded.hash,
                 normalized_name = excluded.normalized_name,
-                status = excluded.status
-            ",
-            (
-                manga.hash.to_string(),
-                manga.name.to_string(),
-                manga.normalized_name.to_string(),
-                manga.authors.to_string(),
-                manga.status.to_string(),
-            ),
+                status = excluded.status",
+            params![
+                manga.hash,
+                manga.name,
+                manga.normalized_name,
+                manga.authors,
+                manga.status,
+            ],
         )?;
 
         Ok(manga)
     }
 
-    pub fn add_manga(&self, manga: Manga) -> MgdlResult<Manga> {
-        let upserted_manga = self.upsert_manga(manga)?;
-
-        Ok(upserted_manga)
-    }
-
     pub fn get_manga_by_normalized_name(&self, normalized_name: &str) -> MgdlResult<Manga> {
-        let conn = Connection::open(&self.path)?;
-        let mut stmt = conn.prepare("select * from mangas where normalized_name = ?")?;
-
-        let rows = stmt
-            .query_map(params![normalized_name], |row| {
-                Ok(Manga {
-                    hash: row.get(0)?,
-                    name: row.get(1)?,
-                    normalized_name: row.get(2)?,
-                    authors: row.get(3)?,
-                    status: row.get(4)?,
-                })
-            })?
-            .collect::<Vec<_>>();
-
-        for manga in rows {
-            return Ok(manga?);
-        }
-
-        Err(MgdlError::Db(format!(
-            "Cound't get manga by normalized_name = '{}'",
-            normalized_name
-        )))
+        self.conn
+            .query_row(
+                "SELECT hash, name, normalized_name, authors, status
+                 FROM mangas WHERE normalized_name = ?",
+                params![normalized_name],
+                manga_from_row,
+            )
+            .map_err(|_| {
+                MgdlError::Db(format!(
+                    "Couldn't get manga by normalized_name = '{}'",
+                    normalized_name
+                ))
+            })
     }
 
     pub fn get_ongoing_manga(&self) -> MgdlResult<Vec<Manga>> {
-        let conn = Connection::open(&self.path)?;
-        let mut stmt = conn.prepare("select * from mangas where status = 'Ongoing'")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT hash, name, normalized_name, authors, status FROM mangas WHERE status = 'Ongoing'")?;
 
-        let mangas: Vec<Manga> = stmt
-            .query_map([], |row| {
-                Ok(Manga {
-                    hash: row.get(0)?,
-                    name: row.get(1)?,
-                    normalized_name: row.get(2)?,
-                    authors: row.get(3)?,
-                    status: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<Manga>, _>>()?;
+        let mangas = stmt
+            .query_map([], manga_from_row)?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(mangas)
     }
 
     pub fn delete_manga_by_normalized_name(&self, normalized_name: &str) -> MgdlResult<()> {
-        let conn = Connection::open(&self.path)?;
-        conn.execute(
+        self.conn.execute(
             "DELETE FROM mangas WHERE normalized_name = ?",
             params![normalized_name],
         )?;

@@ -1,10 +1,12 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::Path, path::PathBuf};
 use tokio::task::JoinSet;
 
 use crate::{
     db,
+    error::{MgdlError, MgdlResult},
     logger::{LogMode, Logger},
-    scrape, Chapter, Manga, MgdlError, MgdlResult,
+    models::{Chapter, Manga},
+    scrape,
 };
 
 const MAX_ATTEMPTS: usize = 20;
@@ -17,11 +19,7 @@ pub struct Downloader {
 
 impl Downloader {
     pub fn new(manga_dir: PathBuf, db_dir: PathBuf, log_mode: LogMode) -> MgdlResult<Self> {
-        let db_path = db_dir.join("mgdl.db");
-        let db = db::Db::new(db_path);
-
-        db.init()?;
-
+        let db = db::Db::new(db_dir.join("mgdl.db"))?;
         let logger = Logger::new(log_mode);
 
         Ok(Self {
@@ -39,7 +37,7 @@ impl Downloader {
         let (manga, chapters) = scrape::manga_from_url(manga_url, MAX_ATTEMPTS).await?;
 
         spinner.set_message(format!("Adding manga {}", &manga.name));
-        let added_manga = self.db.add_manga(manga)?;
+        let added_manga = self.db.upsert_manga(manga)?;
 
         self.logger.finish_spinner(spinner);
         Ok((added_manga, chapters))
@@ -47,7 +45,7 @@ impl Downloader {
 
     pub async fn download_manga(&self, manga_url: &str) -> MgdlResult<Manga> {
         let (manga, chapters) = self.add(manga_url).await?;
-        let manga_path = self.manga_dir.join(format!("{}", &manga.normalized_name));
+        let manga_path = self.manga_dir.join(&manga.normalized_name);
 
         let spinner = self
             .logger
@@ -60,30 +58,30 @@ impl Downloader {
         Ok(manga)
     }
 
-    pub async fn download_chapters(
+    async fn download_chapters(
         &self,
-        manga_path: &PathBuf,
+        manga_path: &Path,
         manga_name: &str,
-        chapters: &Vec<Chapter>,
+        chapters: &[Chapter],
         skip_chaps: Option<&[usize]>,
     ) -> MgdlResult<()> {
-        fs::create_dir_all(&manga_path)?;
+        fs::create_dir_all(manga_path)?;
 
         let mut join_set = JoinSet::new();
 
         let progress_bar = self.logger.add_bar(chapters.len() as u64)?;
-        progress_bar.set_prefix(format!("Locating chapters and pages"));
+        progress_bar.set_prefix("Locating chapters and pages".to_string());
         for chapter in chapters {
             let chapter_number = chapter
                 .number
                 .split('-')
                 .next()
                 .ok_or(MgdlError::Downloader(
-                    "Could not find manga's name".to_string(),
+                    "Could not parse chapter number".to_string(),
                 ))?
                 .parse::<usize>()?;
 
-            if skip_chaps.map_or(false, |skips| skips.contains(&chapter_number)) {
+            if skip_chaps.is_some_and(|skips| skips.contains(&chapter_number)) {
                 continue;
             }
 
@@ -94,13 +92,10 @@ impl Downloader {
 
             for page in pages {
                 let chapter_path = chapter_path.clone();
-                let page_url = page.url.clone();
-                let page_number = page.number;
-
                 join_set.spawn(scrape::download_page(
-                    page_url,
+                    page.url,
                     chapter_path,
-                    page_number,
+                    page.number,
                     MAX_ATTEMPTS,
                 ));
             }
@@ -113,7 +108,7 @@ impl Downloader {
         self.logger.finish_bar(progress_bar);
 
         let progress_bar = self.logger.add_bar(join_set.len() as u64)?;
-        progress_bar.set_prefix(format!("Downloading pages"));
+        progress_bar.set_prefix("Downloading pages".to_string());
         while let Some(res) = join_set.join_next().await {
             let _ = res?;
             progress_bar.inc(1);
@@ -133,10 +128,8 @@ impl Downloader {
 
         spinner.set_message("Scraping manga and chapters".to_owned());
         let (new_manga, chapters) = scrape::manga_from_url(&manga_url, MAX_ATTEMPTS).await?;
-        let skip_chaps = self.skip_chaps(&new_manga)?;
-        let manga_path = self
-            .manga_dir
-            .join(format!("{}", &new_manga.normalized_name));
+        let skip_chaps = self.existing_chapter_numbers(&new_manga)?;
+        let manga_path = self.manga_dir.join(&new_manga.normalized_name);
 
         spinner.set_message(format!("Downloading {}", &manga.name));
         self.download_chapters(&manga_path, &manga.name, &chapters, Some(&skip_chaps))
@@ -161,7 +154,7 @@ impl Downloader {
         Ok(())
     }
 
-    pub fn cleanup_missing_manga_dirs(&self) -> MgdlResult<()> {
+    fn cleanup_missing_manga_dirs(&self) -> MgdlResult<()> {
         let ongoing_manga = self.db.get_ongoing_manga()?;
         let mut deleted_count = 0;
 
@@ -184,17 +177,15 @@ impl Downloader {
         Ok(())
     }
 
-    pub fn skip_chaps(&self, manga: &Manga) -> MgdlResult<Vec<usize>> {
+    fn existing_chapter_numbers(&self, manga: &Manga) -> MgdlResult<Vec<usize>> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
-        let existing_chaps: Vec<usize> = fs::read_dir(&manga_path)?
-            .filter_map(std::result::Result::ok)
+        let chapters = fs::read_dir(&manga_path)?
+            .filter_map(Result::ok)
             .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter(|file_name| file_name.contains("chapter"))
-            .filter_map(|chapter_name| chapter_name.split('_').nth(1).map(|s| s.to_string()))
-            .filter_map(|chapter_number| chapter_number.split("-").next()?.parse::<usize>().ok())
+            .filter_map(|name| name.strip_prefix("chapter_")?.split('-').next()?.parse().ok())
             .collect();
 
-        Ok(existing_chaps)
+        Ok(chapters)
     }
 
     pub fn reset_db(&self) -> MgdlResult<()> {
@@ -202,7 +193,7 @@ impl Downloader {
             .logger
             .add_spinner(Some("Dropping local DB".to_owned()))?;
 
-        self.db.drop()?;
+        self.db.drop_table()?;
 
         self.logger.finish_spinner(spinner);
         Ok(())

@@ -8,10 +8,7 @@ mod models;
 mod scrape;
 mod utils;
 
-use error::MgdlError;
 use error::MgdlResult;
-use models::Chapter;
-use models::Manga;
 
 #[tokio::main]
 async fn main() {
@@ -47,7 +44,7 @@ async fn run() -> MgdlResult<()> {
                     };
                 }
                 manga_name => {
-                    if let Err(err) = dldr.update(&manga_name).await {
+                    if let Err(err) = dldr.update(manga_name).await {
                         eprintln!("{}", err);
                     };
                 }
@@ -57,10 +54,8 @@ async fn run() -> MgdlResult<()> {
         if let Err(err) = scrape::scrape_to_csv(&manga_url, None).await {
             eprintln!("{}", err);
         }
-    } else {
-        if let Err(err) = cli::print_help() {
-            eprintln!("{}", err);
-        }
+    } else if let Err(err) = cli::print_help() {
+        eprintln!("{}", err);
     }
 
     Ok(())
