@@ -1,7 +1,10 @@
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
 
-use crate::{models::Manga, error::{MgdlError, MgdlResult}};
+use crate::{
+    error::{MgdlError, MgdlResult},
+    models::Manga,
+};
 
 pub struct Db {
     conn: Connection,
@@ -41,8 +44,8 @@ impl Db {
     pub fn upsert_manga(&self, manga: Manga) -> MgdlResult<Manga> {
         let existing = self.conn.query_row(
             "SELECT hash, name, normalized_name, authors, status
-             FROM mangas WHERE name = ? AND authors = ?",
-            params![manga.name, manga.authors],
+             FROM mangas WHERE name = ?",
+            params![manga.name],
             manga_from_row,
         );
 

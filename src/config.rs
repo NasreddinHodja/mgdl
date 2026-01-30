@@ -2,7 +2,10 @@ use directories::ProjectDirs;
 use serde::Deserialize;
 use std::{fs, path::PathBuf};
 
-use crate::{utils::expand_tilde, error::{MgdlError, MgdlResult}};
+use crate::{
+    error::{MgdlError, MgdlResult},
+    utils::expand_tilde,
+};
 
 #[derive(Deserialize)]
 struct RawConfig {
@@ -22,7 +25,9 @@ impl Config {
         let config_dir = project_dirs.config_dir();
         fs::create_dir_all(config_dir)?;
 
-        let config_string = fs::read_to_string(config_dir.join("config.toml"))?;
+        let config_path = config_dir.join("config.toml");
+        let config_string = fs::read_to_string(&config_path)
+            .map_err(|e| MgdlError::Config(format!("{}: {}", config_path.display(), e)))?;
         let raw: RawConfig = toml::from_str(&config_string)?;
 
         Ok(Self {

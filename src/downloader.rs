@@ -110,7 +110,7 @@ impl Downloader {
         let progress_bar = self.logger.add_bar(join_set.len() as u64)?;
         progress_bar.set_prefix("Downloading pages".to_string());
         while let Some(res) = join_set.join_next().await {
-            let _ = res?;
+            res??;
             progress_bar.inc(1);
         }
         self.logger.finish_bar(progress_bar);
@@ -179,10 +179,19 @@ impl Downloader {
 
     fn existing_chapter_numbers(&self, manga: &Manga) -> MgdlResult<Vec<usize>> {
         let manga_path = self.manga_dir.join(&manga.normalized_name);
+        if !manga_path.exists() {
+            return Ok(vec![]);
+        }
         let chapters = fs::read_dir(&manga_path)?
             .filter_map(Result::ok)
             .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter_map(|name| name.strip_prefix("chapter_")?.split('-').next()?.parse().ok())
+            .filter_map(|name| {
+                name.strip_prefix("chapter_")?
+                    .split('-')
+                    .next()?
+                    .parse()
+                    .ok()
+            })
             .collect();
 
         Ok(chapters)

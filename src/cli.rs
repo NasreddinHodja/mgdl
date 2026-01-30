@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser};
 
-use crate::{logger::LogMode, error::MgdlResult};
+use crate::{error::MgdlResult, logger::LogMode};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = "Download manga rust")]

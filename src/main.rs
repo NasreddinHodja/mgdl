@@ -24,38 +24,24 @@ async fn run() -> MgdlResult<()> {
     let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir, args.log)?;
 
     if args.reset {
-        if let Err(err) = dldr.reset_db() {
-            eprintln!("{}", err);
-        }
+        dldr.reset_db()?;
     } else if let Some(manga_url) = args.add {
-        if let Err(err) = dldr.add(&manga_url).await {
-            eprintln!("{}", err)
-        }
+        dldr.add(&manga_url).await?;
     } else if let Some(manga_url) = args.download {
-        if let Err(err) = dldr.download_manga(&manga_url).await {
-            eprintln!("{}", err);
-        }
+        dldr.download_manga(&manga_url).await?;
     } else if let Some(manga) = args.update {
         if let Some(manga_name) = manga {
             match manga_name.as_str() {
-                "all" => {
-                    if let Err(err) = dldr.update_all().await {
-                        eprintln!("{}", err);
-                    };
-                }
+                "all" => dldr.update_all().await?,
                 manga_name => {
-                    if let Err(err) = dldr.update(manga_name).await {
-                        eprintln!("{}", err);
-                    };
+                    dldr.update(manga_name).await?;
                 }
             };
         }
     } else if let Some(manga_url) = args.scrape {
-        if let Err(err) = scrape::scrape_to_csv(&manga_url, None).await {
-            eprintln!("{}", err);
-        }
-    } else if let Err(err) = cli::print_help() {
-        eprintln!("{}", err);
+        scrape::scrape_to_csv(&manga_url, None).await?;
+    } else {
+        cli::print_help()?;
     }
 
     Ok(())

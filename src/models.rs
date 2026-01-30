@@ -40,7 +40,7 @@ impl fmt::Display for Manga {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}:\n\thash: {}\n\tnormalize_name: {}\n\tauthors: {}\n\tstatus: {}",
+            "{}:\n\thash: {}\n\tnormalized_name: {}\n\tauthors: {}\n\tstatus: {}",
             self.name, self.hash, self.normalized_name, self.authors, self.status
         )
     }

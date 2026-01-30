@@ -1,8 +1,8 @@
 use csv::Writer;
 use reqwest::get;
 use scraper::{Html, Selector};
-use std::{fs, io::Write, path::PathBuf, time::Duration};
-use tokio::time::sleep;
+use std::{path::PathBuf, time::Duration};
+use tokio::{fs, io::AsyncWriteExt, time::sleep};
 use uuid::Uuid;
 
 use crate::{
@@ -51,10 +51,7 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> MgdlR
     Ok(pages)
 }
 
-async fn get_manga_chapters(
-    manga_hash: &str,
-    max_attempts: usize,
-) -> MgdlResult<Vec<Chapter>> {
+async fn get_manga_chapters(manga_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Chapter>> {
     let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
     let html = get_with_retry(&url, max_attempts).await?;
 
@@ -92,7 +89,11 @@ async fn get_manga_chapters(
         let number = match parts.as_slice() {
             [major] => format!("{:04}-01", major),
             [major, minor] => format!("{:04}-{:02}", major, minor),
-            _ => return Err(MgdlError::Scrape("Invalid chapter number format".to_string())),
+            _ => {
+                return Err(MgdlError::Scrape(
+                    "Invalid chapter number format".to_string(),
+                ))
+            }
         };
 
         chapters.push(Chapter::new(hash, &number));
@@ -186,14 +187,13 @@ pub async fn download_page(
 
     let bytes = response.bytes().await?;
 
-    let file_ext = page_url
-        .split('.')
-        .next_back()
-        .ok_or(MgdlError::Scrape("Could not find file extension".to_string()))?;
+    let file_ext = page_url.split('.').next_back().ok_or(MgdlError::Scrape(
+        "Could not find file extension".to_string(),
+    ))?;
 
     let file_path = chapter_path.join(format!("{:03}.{}", page_number, file_ext));
-    let mut file = fs::File::create(&file_path)?;
-    file.write_all(&bytes)?;
+    let mut file = fs::File::create(&file_path).await?;
+    file.write_all(&bytes).await?;
 
     Ok(())
 }
@@ -220,7 +220,7 @@ where
         }
     }
 
-    unreachable!()
+    Err(MgdlError::Scrape("Max retry attempts exhausted".into()))
 }
 
 async fn get_with_retry(url: &str, max_attempts: usize) -> MgdlResult<Html> {

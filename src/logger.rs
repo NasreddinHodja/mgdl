@@ -47,7 +47,10 @@ impl Logger {
             LogMode::Quiet => None,
         };
 
-        Ok(MaybeSpinner { inner })
+        Ok(MaybeSpinner {
+            inner,
+            mode: self.mode,
+        })
     }
 
     pub fn finish_spinner(&self, spinner: MaybeSpinner) {
@@ -91,12 +94,19 @@ impl Logger {
 
 pub struct MaybeSpinner {
     inner: Option<ProgressBar>,
+    mode: LogMode,
 }
 
 impl MaybeSpinner {
     pub fn set_message(&self, msg: String) {
-        if let Some(ref s) = self.inner {
-            s.set_message(msg);
+        match self.mode {
+            LogMode::Fancy => {
+                if let Some(ref s) = self.inner {
+                    s.set_message(msg);
+                }
+            }
+            LogMode::Plain => println!("[INFO] {msg}"),
+            LogMode::Quiet => {}
         }
     }
 }

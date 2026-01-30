@@ -30,13 +30,24 @@ pub fn normalize(s: &str) -> String {
     }
 
     // Collapse consecutive underscores and trim them from edges
-    let collapsed: String = out
-        .split('_')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("_");
+    let mut result = String::with_capacity(out.len());
+    let mut prev_underscore = true; // starts true to trim leading underscores
+    for c in out.chars() {
+        if c == '_' {
+            if !prev_underscore {
+                result.push('_');
+            }
+            prev_underscore = true;
+        } else {
+            result.push(c);
+            prev_underscore = false;
+        }
+    }
+    if result.ends_with('_') {
+        result.pop();
+    }
 
-    collapsed.to_lowercase()
+    result.to_lowercase()
 }
 
 pub fn extract_hash(url: &str) -> Option<String> {
@@ -51,9 +62,8 @@ pub fn extract_hash(url: &str) -> Option<String> {
 
 pub fn expand_tilde(path: PathBuf) -> MgdlResult<PathBuf> {
     if let Ok(stripped) = path.strip_prefix("~") {
-        let base_dirs = BaseDirs::new().ok_or_else(|| {
-            MgdlError::Config("Could not determine home directory".to_string())
-        })?;
+        let base_dirs = BaseDirs::new()
+            .ok_or_else(|| MgdlError::Config("Could not determine home directory".to_string()))?;
         return Ok(base_dirs.home_dir().join(stripped));
     }
 
