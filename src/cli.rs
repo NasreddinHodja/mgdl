@@ -5,11 +5,11 @@ use crate::{error::MgdlResult, logger::LogMode};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = "Download manga rust")]
 pub struct Args {
-    /// URL of manga to download
+    /// uRL of manga to download
     #[arg(short, long)]
     pub download: Option<String>,
 
-    /// URL of manga to add
+    /// uRL of manga to add
     #[arg(short, long)]
     pub add: Option<String>,
 
@@ -17,15 +17,15 @@ pub struct Args {
     #[arg(short, long)]
     pub update: Option<Option<String>>,
 
-    /// URL of manga to scrape
+    /// uRL of manga to scrape
     #[arg(short, long)]
     pub scrape: Option<String>,
 
-    /// Reset local DB
+    /// reset local DB
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,
 
-    /// Logging mode: plain, fancy, or quiet
+    /// logging mode: plain, fancy, or quiet
     #[arg(short, long, value_enum, default_value = "plain")]
     pub log: LogMode,
 }

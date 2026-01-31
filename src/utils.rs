@@ -29,7 +29,7 @@ pub fn normalize(s: &str) -> String {
         }
     }
 
-    // Collapse consecutive underscores and trim them from edges
+    // collapse consecutive underscores and trim them from edges
     let mut result = String::with_capacity(out.len());
     let mut prev_underscore = true; // starts true to trim leading underscores
     for c in out.chars() {
