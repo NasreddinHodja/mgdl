@@ -10,11 +10,13 @@ use crate::{
 #[derive(Deserialize)]
 struct RawConfig {
     manga_dir: String,
+    base_url: String,
 }
 
 pub struct Config {
     pub manga_dir: PathBuf,
     pub db_dir: PathBuf,
+    pub base_url: String,
 }
 
 impl Config {
@@ -33,6 +35,7 @@ impl Config {
         Ok(Self {
             manga_dir: expand_tilde(PathBuf::from(raw.manga_dir))?,
             db_dir: expand_tilde(config_dir.to_path_buf())?,
+            base_url: raw.base_url,
         })
     }
 }

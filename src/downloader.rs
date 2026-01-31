@@ -16,17 +16,19 @@ const MAX_ATTEMPTS: usize = 20;
 pub struct Downloader {
     db: db::Db,
     manga_dir: PathBuf,
+    base_url: String,
     logger: Logger,
 }
 
 impl Downloader {
-    pub fn new(manga_dir: PathBuf, db_dir: PathBuf, log_mode: LogMode) -> MgdlResult<Self> {
+    pub fn new(manga_dir: PathBuf, db_dir: PathBuf, base_url: String, log_mode: LogMode) -> MgdlResult<Self> {
         let db = db::Db::new(db_dir.join("mgdl.db"))?;
         let logger = Logger::new(log_mode);
 
         Ok(Self {
             db,
             manga_dir,
+            base_url,
             logger,
         })
     }
@@ -36,7 +38,7 @@ impl Downloader {
             .logger
             .add_spinner(Some("Scraping manga and chapters".to_owned()))?;
 
-        let (manga, chapters) = scrape::manga_from_url(manga_url, MAX_ATTEMPTS).await?;
+        let (manga, chapters) = scrape::manga_from_url(&self.base_url, manga_url, MAX_ATTEMPTS).await?;
 
         spinner.set_message(format!("Adding manga {}", &manga.name));
         let added_manga = self.db.upsert_manga(manga)?;
@@ -88,7 +90,7 @@ impl Downloader {
                 continue;
             }
 
-            let pages = scrape::get_chapter_pages(&chapter.hash, MAX_ATTEMPTS).await?;
+            let pages = scrape::get_chapter_pages(&self.base_url, &chapter.hash, MAX_ATTEMPTS).await?;
             let chapter_path = manga_path.join(format!("chapter_{}", &chapter.number));
 
             fs::create_dir_all(&chapter_path)?;
@@ -126,10 +128,10 @@ impl Downloader {
             .add_spinner(Some("Getting local manga data".to_owned()))?;
 
         let manga = self.db.get_manga_by_normalized_name(manga_name)?;
-        let manga_url = format!("https://weebcentral.com/series/{}", &manga.hash);
+        let manga_url = format!("{}/series/{}", &self.base_url, &manga.hash);
 
         spinner.set_message("Scraping manga and chapters".to_owned());
-        let (new_manga, chapters) = scrape::manga_from_url(&manga_url, MAX_ATTEMPTS).await?;
+        let (new_manga, chapters) = scrape::manga_from_url(&self.base_url, &manga_url, MAX_ATTEMPTS).await?;
         let skip_chaps = self.existing_chapter_numbers(&new_manga)?;
         let manga_path = self.manga_dir.join(&new_manga.normalized_name);
 

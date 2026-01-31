@@ -21,7 +21,8 @@ async fn main() {
 async fn run() -> MgdlResult<()> {
     let args = cli::parse();
     let config = config::Config::load()?;
-    let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir, args.log)?;
+    let base_url = config.base_url;
+    let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir, base_url.clone(), args.log)?;
 
     if args.reset {
         dldr.reset_db()?;
@@ -39,7 +40,7 @@ async fn run() -> MgdlResult<()> {
             };
         }
     } else if let Some(manga_url) = args.scrape {
-        scrape::scrape_to_csv(&manga_url, None).await?;
+        scrape::scrape_to_csv(&base_url, &manga_url, None).await?;
     } else {
         cli::print_help()?;
     }

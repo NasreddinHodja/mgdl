@@ -17,10 +17,10 @@ fn create_selector(selectors: &str) -> MgdlResult<Selector> {
     Selector::parse(selectors).map_err(|err| MgdlError::Scrape(err.to_string()))
 }
 
-pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Page>> {
+pub async fn get_chapter_pages(base_url: &str, chapter_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Page>> {
     let url = format!(
-        "https://weebcentral.com/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip",
-        chapter_hash
+        "{}/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip",
+        base_url, chapter_hash
     );
 
     let html = get_with_retry(&url, max_attempts).await?;
@@ -51,8 +51,8 @@ pub async fn get_chapter_pages(chapter_hash: &str, max_attempts: usize) -> MgdlR
     Ok(pages)
 }
 
-async fn get_manga_chapters(manga_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Chapter>> {
-    let url = format!("https://weebcentral.com/series/{manga_hash}/full-chapter-list");
+async fn get_manga_chapters(base_url: &str, manga_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Chapter>> {
+    let url = format!("{base_url}/series/{manga_hash}/full-chapter-list");
     let html = get_with_retry(&url, max_attempts).await?;
 
     let link_selector = create_selector("div > a")?;
@@ -103,6 +103,7 @@ async fn get_manga_chapters(manga_hash: &str, max_attempts: usize) -> MgdlResult
 }
 
 pub async fn manga_from_url(
+    base_url: &str,
     manga_url: &str,
     max_attempts: usize,
 ) -> MgdlResult<(Manga, Vec<Chapter>)> {
@@ -167,7 +168,7 @@ pub async fn manga_from_url(
     }
 
     let manga = Manga::new(&hash, &name, &normalized_name, &authors, &status);
-    let chapters = get_manga_chapters(&hash, max_attempts).await?;
+    let chapters = get_manga_chapters(base_url, &hash, max_attempts).await?;
 
     Ok((manga, chapters))
 }
@@ -249,9 +250,9 @@ async fn get_with_retry(url: &str, max_attempts: usize) -> MgdlResult<Html> {
     .await
 }
 
-pub async fn scrape_to_csv(manga_url: &str, max_attempts: Option<usize>) -> MgdlResult<()> {
+pub async fn scrape_to_csv(base_url: &str, manga_url: &str, max_attempts: Option<usize>) -> MgdlResult<()> {
     let max_attempts = max_attempts.unwrap_or(10);
-    let (manga, chapters) = manga_from_url(manga_url, max_attempts).await?;
+    let (manga, chapters) = manga_from_url(base_url, manga_url, max_attempts).await?;
 
     let manga_id = Uuid::new_v4().to_string();
 
@@ -271,7 +272,7 @@ pub async fn scrape_to_csv(manga_url: &str, max_attempts: Option<usize>) -> Mgdl
     page_w.write_record(["id", "manga_id", "chapter_number", "number", "url"])?;
 
     for chapter in chapters {
-        let pages = get_chapter_pages(&chapter.hash, max_attempts).await?;
+        let pages = get_chapter_pages(base_url, &chapter.hash, max_attempts).await?;
 
         for page in pages {
             let page_id = Uuid::new_v4().to_string();
