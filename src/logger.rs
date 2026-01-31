@@ -147,7 +147,7 @@ impl MaybeBar {
 fn new_progress_bar(size: u64) -> MgdlResult<ProgressBar> {
     let bar = ProgressBar::new(size);
     let style = ProgressStyle::with_template("{prefix} {elapsed_precise} {wide_bar} {pos}/{len}")
-        .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+        .map_err(|e| MgdlError::Logger(e.to_string()))?;
     bar.set_style(style);
     Ok(bar)
 }
@@ -155,7 +155,7 @@ fn new_progress_bar(size: u64) -> MgdlResult<ProgressBar> {
 fn new_spinner() -> MgdlResult<ProgressBar> {
     let spinner = ProgressBar::new_spinner();
     let style = ProgressStyle::with_template("{spinner} {msg}")
-        .map_err(|e| MgdlError::Scrape(e.to_string()))?;
+        .map_err(|e| MgdlError::Logger(e.to_string()))?;
     spinner.set_style(style);
     spinner.enable_steady_tick(Duration::from_millis(50));
     Ok(spinner)

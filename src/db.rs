@@ -42,23 +42,13 @@ impl Db {
     }
 
     pub fn upsert_manga(&self, manga: Manga) -> MgdlResult<Manga> {
-        let existing = self.conn.query_row(
-            "SELECT hash, name, normalized_name, authors, status
-             FROM mangas WHERE name = ?",
-            params![manga.name],
-            manga_from_row,
-        );
-
-        if let Ok(found) = existing {
-            return Ok(found);
-        }
-
         self.conn.execute(
             "INSERT INTO mangas (hash, name, normalized_name, authors, status)
              VALUES (?, ?, ?, ?, ?)
              ON CONFLICT(name) DO UPDATE SET
                 hash = excluded.hash,
                 normalized_name = excluded.normalized_name,
+                authors = excluded.authors,
                 status = excluded.status",
             params![
                 manga.hash,

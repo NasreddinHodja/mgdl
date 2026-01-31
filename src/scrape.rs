@@ -187,9 +187,13 @@ pub async fn download_page(
 
     let bytes = response.bytes().await?;
 
-    let file_ext = page_url.split('.').next_back().ok_or(MgdlError::Scrape(
-        "Could not find file extension".to_string(),
-    ))?;
+    let url_without_query = page_url.split('?').next().unwrap_or(&page_url);
+    let file_ext = url_without_query
+        .split('.')
+        .next_back()
+        .ok_or(MgdlError::Scrape(
+            "Could not find file extension".to_string(),
+        ))?;
 
     let file_path = chapter_path.join(format!("{:03}.{}", page_number, file_ext));
     let mut file = fs::File::create(&file_path).await?;

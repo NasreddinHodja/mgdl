@@ -1,4 +1,6 @@
+use std::sync::Arc;
 use std::{fs, path::Path, path::PathBuf};
+use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 use crate::{
@@ -68,6 +70,7 @@ impl Downloader {
         fs::create_dir_all(manga_path)?;
 
         let mut join_set = JoinSet::new();
+        let semaphore = Arc::new(Semaphore::new(16));
 
         let progress_bar = self.logger.add_bar(chapters.len() as u64)?;
         progress_bar.set_prefix("Locating chapters and pages".to_string());
@@ -92,16 +95,15 @@ impl Downloader {
 
             for page in pages {
                 let chapter_path = chapter_path.clone();
-                join_set.spawn(scrape::download_page(
-                    page.url,
-                    chapter_path,
-                    page.number,
-                    MAX_ATTEMPTS,
-                ));
+                let permit = Arc::clone(&semaphore);
+                join_set.spawn(async move {
+                    let _permit = permit.acquire().await.unwrap();
+                    scrape::download_page(page.url, chapter_path, page.number, MAX_ATTEMPTS).await
+                });
             }
             progress_bar.inc(1);
             progress_bar.success(format!(
-                "Downloaded \"{}\" - Chapter {}",
+                "Queued \"{}\" - Chapter {}",
                 manga_name, &chapter.number
             ));
         }
@@ -143,9 +145,9 @@ impl Downloader {
         let spinner = self.logger.add_spinner(None)?;
 
         spinner.set_message("Cleaning up missing manga directories".to_owned());
-        self.cleanup_missing_manga_dirs()?;
+        let ongoing_manga = self.cleanup_missing_manga_dirs()?;
 
-        for manga in self.db.get_ongoing_manga()? {
+        for manga in ongoing_manga {
             spinner.set_message(format!("Trying to update {}", &manga.name));
             self.update(&manga.normalized_name).await?;
         }
@@ -154,9 +156,10 @@ impl Downloader {
         Ok(())
     }
 
-    fn cleanup_missing_manga_dirs(&self) -> MgdlResult<()> {
+    fn cleanup_missing_manga_dirs(&self) -> MgdlResult<Vec<Manga>> {
         let ongoing_manga = self.db.get_ongoing_manga()?;
         let mut deleted_count = 0;
+        let mut remaining = Vec::new();
 
         for manga in ongoing_manga {
             let manga_path = self.manga_dir.join(&manga.normalized_name);
@@ -164,6 +167,8 @@ impl Downloader {
                 self.db
                     .delete_manga_by_normalized_name(&manga.normalized_name)?;
                 deleted_count += 1;
+            } else {
+                remaining.push(manga);
             }
         }
 
@@ -174,7 +179,7 @@ impl Downloader {
             );
         }
 
-        Ok(())
+        Ok(remaining)
     }
 
     fn existing_chapter_numbers(&self, manga: &Manga) -> MgdlResult<Vec<usize>> {
@@ -182,17 +187,21 @@ impl Downloader {
         if !manga_path.exists() {
             return Ok(vec![]);
         }
-        let chapters = fs::read_dir(&manga_path)?
-            .filter_map(Result::ok)
-            .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter_map(|name| {
-                name.strip_prefix("chapter_")?
-                    .split('-')
-                    .next()?
-                    .parse()
-                    .ok()
-            })
-            .collect();
+        let mut chapters = Vec::new();
+        for entry in fs::read_dir(&manga_path)? {
+            let entry = entry?;
+            let Some(name) = entry.file_name().into_string().ok() else {
+                continue;
+            };
+            let Some(num) = name
+                .strip_prefix("chapter_")
+                .and_then(|s| s.split('-').next())
+                .and_then(|s| s.parse().ok())
+            else {
+                continue;
+            };
+            chapters.push(num);
+        }
 
         Ok(chapters)
     }
