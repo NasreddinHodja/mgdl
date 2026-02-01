@@ -4,7 +4,10 @@ use std::{fs, path::Path, path::PathBuf};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
+use std::time::Instant;
+
 use crate::{
+    bench::BenchCollector,
     db,
     error::MgdlResult,
     logger::{LogMode, Logger},
@@ -19,6 +22,7 @@ pub struct Downloader {
     manga_dir: PathBuf,
     base_url: String,
     logger: Logger,
+    bench: Option<BenchCollector>,
 }
 
 impl Downloader {
@@ -27,6 +31,7 @@ impl Downloader {
         db_dir: PathBuf,
         base_url: String,
         log_mode: LogMode,
+        bench: Option<BenchCollector>,
     ) -> MgdlResult<Self> {
         let db = db::Db::new(db_dir.join("mgdl.db"))?;
         let logger = Logger::new(log_mode);
@@ -36,6 +41,7 @@ impl Downloader {
             manga_dir,
             base_url,
             logger,
+            bench,
         })
     }
 
@@ -44,8 +50,12 @@ impl Downloader {
             .logger
             .add_spinner(Some("Scraping manga and chapters".to_owned()))?;
 
+        let scrape_start = Instant::now();
         let (manga, chapters) =
             scrape::manga_from_url(&self.base_url, manga_url, MAX_ATTEMPTS).await?;
+        if let Some(bench) = &self.bench {
+            bench.record_scrape(scrape_start.elapsed());
+        }
 
         spinner.set_message(format!("Adding manga {}", &manga.name));
         let added_manga = self.db.upsert_manga(manga)?;
@@ -84,17 +94,22 @@ impl Downloader {
     ) -> MgdlResult<()> {
         fs::create_dir_all(manga_path)?;
 
-        let mut join_set = JoinSet::new();
+        let mut join_set: JoinSet<MgdlResult<()>> = JoinSet::new();
         let semaphore = Arc::new(Semaphore::new(16));
 
         let progress_bar = self.logger.add_bar(chapters.len() as u64)?;
         progress_bar.set_prefix("Locating chapters and pages".to_string());
         for chapter in chapters {
+            let ch_start = Instant::now();
             let pages =
                 scrape::get_chapter_pages(&self.base_url, &chapter.hash, MAX_ATTEMPTS).await?;
+            if let Some(bench) = &self.bench {
+                bench.record_chapter_discovered(ch_start.elapsed());
+            }
             let chapter_path = manga_path.join(format!("chapter_{}", &chapter.number));
 
             let existing = existing_page_numbers(&chapter_path);
+            let skipped_count = if force { 0 } else { existing.len() };
             let new_pages: Vec<_> = if force {
                 pages
             } else {
@@ -104,7 +119,16 @@ impl Downloader {
                     .collect()
             };
 
+            if let Some(bench) = &self.bench {
+                for _ in 0..skipped_count {
+                    bench.record_page_skipped();
+                }
+            }
+
             if new_pages.is_empty() {
+                if let Some(bench) = &self.bench {
+                    bench.record_chapter_skipped();
+                }
                 progress_bar.inc(1);
                 progress_bar.success(format!(
                     "Skipped \"{}\" - Chapter {}",
@@ -118,9 +142,17 @@ impl Downloader {
             for page in new_pages {
                 let chapter_path = chapter_path.clone();
                 let permit = Arc::clone(&semaphore);
+                let bench = self.bench.clone();
                 join_set.spawn(async move {
                     let _permit = permit.acquire().await.unwrap();
-                    scrape::download_page(page.url, chapter_path, page.number, MAX_ATTEMPTS).await
+                    let page_start = Instant::now();
+                    let bytes =
+                        scrape::download_page(page.url, chapter_path, page.number, MAX_ATTEMPTS)
+                            .await?;
+                    if let Some(bench) = &bench {
+                        bench.record_page_downloaded(page_start.elapsed(), bytes);
+                    }
+                    Ok(())
                 });
             }
             progress_bar.inc(1);

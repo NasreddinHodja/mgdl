@@ -36,6 +36,10 @@ pub struct Args {
     /// logging mode: plain, fancy, or quiet
     #[arg(short, long, value_enum, default_value = "plain")]
     pub log: LogMode,
+
+    /// print benchmark timing data after download
+    #[arg(short, long, default_value_t = false)]
+    pub bench: bool,
 }
 
 pub fn parse() -> Args {

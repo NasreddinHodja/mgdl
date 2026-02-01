@@ -205,7 +205,7 @@ pub async fn download_page(
     chapter_path: PathBuf,
     page_number: usize,
     max_attempts: usize,
-) -> MgdlResult<()> {
+) -> MgdlResult<usize> {
     let response = retry(
         || async { Ok(get(&page_url).await?) },
         max_attempts,
@@ -214,6 +214,7 @@ pub async fn download_page(
     .await?;
 
     let bytes = response.bytes().await?;
+    let byte_count = bytes.len();
 
     let url_without_query = page_url.split('?').next().unwrap_or(&page_url);
     let file_ext = url_without_query
@@ -227,7 +228,7 @@ pub async fn download_page(
     let mut file = fs::File::create(&file_path).await?;
     file.write_all(&bytes).await?;
 
-    Ok(())
+    Ok(byte_count)
 }
 
 async fn retry<F, Fut, T>(
