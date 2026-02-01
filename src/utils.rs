@@ -60,6 +60,84 @@ pub fn extract_hash(url: &str) -> Option<String> {
     Some(hash.to_string())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_basic() {
+        assert_eq!(normalize("Tokyo: Alien Bros!"), "tokyo_alien_bros");
+    }
+
+    #[test]
+    fn normalize_accents() {
+        assert_eq!(normalize("Café"), "cafe");
+    }
+
+    #[test]
+    fn normalize_spaces_and_dashes() {
+        assert_eq!(normalize("  a--b  "), "a_b");
+    }
+
+    #[test]
+    fn normalize_uppercase_accents() {
+        assert_eq!(normalize("ÉLAN"), "elan");
+    }
+
+    #[test]
+    fn normalize_consecutive_special_chars() {
+        assert_eq!(normalize("a!!!b"), "a_b");
+    }
+
+    #[test]
+    fn normalize_empty_string() {
+        assert_eq!(normalize(""), "");
+    }
+
+    #[test]
+    fn normalize_only_special_chars() {
+        assert_eq!(normalize("!!!"), "");
+    }
+
+    #[test]
+    fn normalize_numbers_preserved() {
+        assert_eq!(normalize("Chapter 123"), "chapter_123");
+    }
+
+    #[test]
+    fn extract_hash_valid() {
+        let url = "https://example.com/series/01JK8N8A7W8ZGR7014BM2ZMGBB/tokyo-alien-bros";
+        assert_eq!(
+            extract_hash(url),
+            Some("01JK8N8A7W8ZGR7014BM2ZMGBB".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_hash_trailing_slash() {
+        let url = "https://example.com/series/HASH123/slug/";
+        assert_eq!(extract_hash(url), Some("HASH123".to_string()));
+    }
+
+    #[test]
+    fn extract_hash_no_series() {
+        assert_eq!(extract_hash("https://example.com/foo/bar"), None);
+    }
+
+    #[test]
+    fn extract_hash_empty_hash() {
+        assert_eq!(extract_hash("https://example.com/series/"), None);
+    }
+
+    #[test]
+    fn extract_hash_series_only() {
+        assert_eq!(
+            extract_hash("https://example.com/series/MYHASH"),
+            Some("MYHASH".to_string())
+        );
+    }
+}
+
 pub fn expand_tilde(path: PathBuf) -> MgdlResult<PathBuf> {
     if let Ok(stripped) = path.strip_prefix("~") {
         let base_dirs = BaseDirs::new()

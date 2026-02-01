@@ -17,17 +17,8 @@ fn create_selector(selectors: &str) -> MgdlResult<Selector> {
     Selector::parse(selectors).map_err(|err| MgdlError::Scrape(err.to_string()))
 }
 
-pub async fn get_chapter_pages(
-    base_url: &str,
-    chapter_hash: &str,
-    max_attempts: usize,
-) -> MgdlResult<Vec<Page>> {
-    let url = format!(
-        "{}/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip",
-        base_url, chapter_hash
-    );
-
-    let html = get_with_retry(&url, max_attempts).await?;
+/// Parse page image data from pre-fetched HTML (the chapter images page).
+pub fn parse_pages_from_html(html: &Html) -> MgdlResult<Vec<Page>> {
     let selector = create_selector("img")?;
 
     let pages: Vec<Page> = html
@@ -55,14 +46,22 @@ pub async fn get_chapter_pages(
     Ok(pages)
 }
 
-async fn get_manga_chapters(
+pub async fn get_chapter_pages(
     base_url: &str,
-    manga_hash: &str,
+    chapter_hash: &str,
     max_attempts: usize,
-) -> MgdlResult<Vec<Chapter>> {
-    let url = format!("{base_url}/series/{manga_hash}/full-chapter-list");
-    let html = get_with_retry(&url, max_attempts).await?;
+) -> MgdlResult<Vec<Page>> {
+    let url = format!(
+        "{}/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip",
+        base_url, chapter_hash
+    );
 
+    let html = get_with_retry(&url, max_attempts).await?;
+    parse_pages_from_html(&html)
+}
+
+/// Parse chapter list from pre-fetched HTML (the full-chapter-list page).
+pub fn parse_chapters_from_html(html: &Html) -> MgdlResult<Vec<Chapter>> {
     let link_selector = create_selector("div > a")?;
     let number_selector = create_selector("span > span")?;
 
@@ -110,13 +109,9 @@ async fn get_manga_chapters(
     Ok(chapters)
 }
 
-pub async fn manga_from_url(
-    base_url: &str,
-    manga_url: &str,
-    max_attempts: usize,
-) -> MgdlResult<(Manga, Vec<Chapter>)> {
-    let html = get_with_retry(manga_url, max_attempts).await?;
-
+/// Parse manga metadata from pre-fetched HTML (the manga series page).
+/// `url` is the original manga URL, used to extract the hash.
+pub fn parse_manga_from_html(html: &Html, url: &str) -> MgdlResult<Manga> {
     let name_selector = create_selector("main > div > section > section > h1")?;
     let name = html
         .select(&name_selector)
@@ -128,9 +123,9 @@ pub async fn manga_from_url(
         .to_string();
     let normalized_name = normalize(&name);
 
-    let hash = extract_hash(manga_url).ok_or(MgdlError::Scrape(format!(
+    let hash = extract_hash(url).ok_or(MgdlError::Scrape(format!(
         "Could not parse manga hash from {}",
-        manga_url
+        url
     )))?;
 
     let mut authors = String::new();
@@ -175,10 +170,34 @@ pub async fn manga_from_url(
         }
     }
 
-    let manga = Manga::new(&hash, &name, &normalized_name, &authors, &status);
-    let chapters = get_manga_chapters(base_url, &hash, max_attempts).await?;
+    Ok(Manga::new(
+        &hash,
+        &name,
+        &normalized_name,
+        &authors,
+        &status,
+    ))
+}
 
+pub async fn manga_from_url(
+    base_url: &str,
+    manga_url: &str,
+    max_attempts: usize,
+) -> MgdlResult<(Manga, Vec<Chapter>)> {
+    let html = get_with_retry(manga_url, max_attempts).await?;
+    let manga = parse_manga_from_html(&html, manga_url)?;
+    let chapters = get_manga_chapters(base_url, &manga.hash, max_attempts).await?;
     Ok((manga, chapters))
+}
+
+async fn get_manga_chapters(
+    base_url: &str,
+    manga_hash: &str,
+    max_attempts: usize,
+) -> MgdlResult<Vec<Chapter>> {
+    let url = format!("{base_url}/series/{manga_hash}/full-chapter-list");
+    let html = get_with_retry(&url, max_attempts).await?;
+    parse_chapters_from_html(&html)
 }
 
 pub async fn download_page(
@@ -236,7 +255,7 @@ where
     Err(MgdlError::Scrape("Max retry attempts exhausted".into()))
 }
 
-async fn get_with_retry(url: &str, max_attempts: usize) -> MgdlResult<Html> {
+pub async fn get_with_retry(url: &str, max_attempts: usize) -> MgdlResult<Html> {
     retry(
         || async {
             let response = get(url).await?;

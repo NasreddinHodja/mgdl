@@ -89,3 +89,97 @@ pub struct Page {
     pub url: String,
     pub number: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chapter_range_full_range() {
+        let r = ChapterRange::parse("5..10").unwrap();
+        assert_eq!(r.start, Some(5));
+        assert_eq!(r.end, Some(10));
+    }
+
+    #[test]
+    fn chapter_range_open_end() {
+        let r = ChapterRange::parse("5..").unwrap();
+        assert_eq!(r.start, Some(5));
+        assert_eq!(r.end, None);
+    }
+
+    #[test]
+    fn chapter_range_open_start() {
+        let r = ChapterRange::parse("..10").unwrap();
+        assert_eq!(r.start, None);
+        assert_eq!(r.end, Some(10));
+    }
+
+    #[test]
+    fn chapter_range_single() {
+        let r = ChapterRange::parse("5").unwrap();
+        assert_eq!(r.start, Some(5));
+        assert_eq!(r.end, Some(5));
+    }
+
+    #[test]
+    fn chapter_range_contains_in_range() {
+        let r = ChapterRange::parse("5..10").unwrap();
+        assert!(r.contains(5));
+        assert!(r.contains(7));
+        assert!(r.contains(10));
+        assert!(!r.contains(4));
+        assert!(!r.contains(11));
+    }
+
+    #[test]
+    fn chapter_range_contains_open_end() {
+        let r = ChapterRange::parse("5..").unwrap();
+        assert!(r.contains(5));
+        assert!(r.contains(9999));
+        assert!(!r.contains(4));
+    }
+
+    #[test]
+    fn chapter_range_contains_open_start() {
+        let r = ChapterRange::parse("..10").unwrap();
+        assert!(r.contains(0));
+        assert!(r.contains(10));
+        assert!(!r.contains(11));
+    }
+
+    #[test]
+    fn chapter_range_parse_invalid() {
+        assert!(ChapterRange::parse("abc").is_err());
+        assert!(ChapterRange::parse("abc..10").is_err());
+    }
+
+    #[test]
+    fn chapter_major_number() {
+        let ch = Chapter::new("hash", "0010-01");
+        assert_eq!(ch.major_number(), Some(10));
+    }
+
+    #[test]
+    fn chapter_major_number_decimal() {
+        let ch = Chapter::new("hash", "0005-05");
+        assert_eq!(ch.major_number(), Some(5));
+    }
+
+    #[test]
+    fn chapter_new_stores_fields() {
+        let ch = Chapter::new("abc123", "0001-01");
+        assert_eq!(ch.hash, "abc123");
+        assert_eq!(ch.number, "0001-01");
+    }
+
+    #[test]
+    fn manga_display() {
+        let m = Manga::new("h", "Test Manga", "test_manga", "Author A", "Ongoing");
+        let display = format!("{}", m);
+        assert!(display.contains("Test Manga"));
+        assert!(display.contains("test_manga"));
+        assert!(display.contains("Author A"));
+        assert!(display.contains("Ongoing"));
+    }
+}
