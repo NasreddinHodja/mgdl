@@ -1,6 +1,6 @@
 use clap::{CommandFactory, Parser};
 
-use crate::{error::MgdlResult, logger::LogMode};
+use crate::{error::MgdlResult, logger::LogMode, models::ChapterRange};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = "Download manga rust")]
@@ -20,6 +20,10 @@ pub struct Args {
     /// URL of manga to scrape
     #[arg(short, long)]
     pub scrape: Option<String>,
+
+    /// chapter range to download (e.g., 5..10, 5.., ..10, 5)
+    #[arg(short, long, value_parser = ChapterRange::parse)]
+    pub chapters: Option<ChapterRange>,
 
     /// reset local DB
     #[arg(short, long, default_value_t = false)]

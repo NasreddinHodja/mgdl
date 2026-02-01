@@ -29,7 +29,7 @@ async fn run() -> MgdlResult<()> {
     } else if let Some(manga_url) = args.add {
         dldr.add(&manga_url).await?;
     } else if let Some(manga_url) = args.download {
-        dldr.download_manga(&manga_url).await?;
+        dldr.download_manga(&manga_url, args.chapters.as_ref()).await?;
     } else if let Some(manga) = args.update {
         if let Some(manga_name) = manga {
             match manga_name.as_str() {

@@ -7,7 +7,7 @@ use crate::{
     db,
     error::{MgdlError, MgdlResult},
     logger::{LogMode, Logger},
-    models::{Chapter, Manga},
+    models::{Chapter, ChapterRange, Manga},
     scrape,
 };
 
@@ -47,8 +47,13 @@ impl Downloader {
         Ok((added_manga, chapters))
     }
 
-    pub async fn download_manga(&self, manga_url: &str) -> MgdlResult<Manga> {
+    pub async fn download_manga(
+        &self,
+        manga_url: &str,
+        chapter_range: Option<&ChapterRange>,
+    ) -> MgdlResult<Manga> {
         let (manga, chapters) = self.add(manga_url).await?;
+        let chapters = Self::filter_by_range(chapters, chapter_range);
         let manga_path = self.manga_dir.join(&manga.normalized_name);
 
         let spinner = self
@@ -206,6 +211,16 @@ impl Downloader {
         }
 
         Ok(chapters)
+    }
+
+    fn filter_by_range(chapters: Vec<Chapter>, range: Option<&ChapterRange>) -> Vec<Chapter> {
+        let Some(range) = range else {
+            return chapters;
+        };
+        chapters
+            .into_iter()
+            .filter(|ch| ch.major_number().is_some_and(|n| range.contains(n)))
+            .collect()
     }
 
     pub fn reset_db(&self) -> MgdlResult<()> {

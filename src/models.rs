@@ -13,6 +13,44 @@ impl Chapter {
             number: number.to_string(),
         }
     }
+
+    pub fn major_number(&self) -> Option<usize> {
+        self.number.split('-').next()?.parse().ok()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChapterRange {
+    pub start: Option<usize>,
+    pub end: Option<usize>,
+}
+
+impl ChapterRange {
+    pub fn parse(s: &str) -> Result<Self, String> {
+        if let Some((start, end)) = s.split_once("..") {
+            let start = if start.is_empty() {
+                None
+            } else {
+                Some(start.parse::<usize>().map_err(|e| e.to_string())?)
+            };
+            let end = if end.is_empty() {
+                None
+            } else {
+                Some(end.parse::<usize>().map_err(|e| e.to_string())?)
+            };
+            Ok(Self { start, end })
+        } else {
+            let n = s.parse::<usize>().map_err(|e| e.to_string())?;
+            Ok(Self {
+                start: Some(n),
+                end: Some(n),
+            })
+        }
+    }
+
+    pub fn contains(&self, chapter: usize) -> bool {
+        self.start.is_none_or(|s| chapter >= s) && self.end.is_none_or(|e| chapter <= e)
+    }
 }
 
 #[derive(Debug)]
