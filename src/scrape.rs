@@ -17,7 +17,11 @@ fn create_selector(selectors: &str) -> MgdlResult<Selector> {
     Selector::parse(selectors).map_err(|err| MgdlError::Scrape(err.to_string()))
 }
 
-pub async fn get_chapter_pages(base_url: &str, chapter_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Page>> {
+pub async fn get_chapter_pages(
+    base_url: &str,
+    chapter_hash: &str,
+    max_attempts: usize,
+) -> MgdlResult<Vec<Page>> {
     let url = format!(
         "{}/chapters/{}/images?is_prev=False&current_page=1&reading_style=long_strip",
         base_url, chapter_hash
@@ -51,7 +55,11 @@ pub async fn get_chapter_pages(base_url: &str, chapter_hash: &str, max_attempts:
     Ok(pages)
 }
 
-async fn get_manga_chapters(base_url: &str, manga_hash: &str, max_attempts: usize) -> MgdlResult<Vec<Chapter>> {
+async fn get_manga_chapters(
+    base_url: &str,
+    manga_hash: &str,
+    max_attempts: usize,
+) -> MgdlResult<Vec<Chapter>> {
     let url = format!("{base_url}/series/{manga_hash}/full-chapter-list");
     let html = get_with_retry(&url, max_attempts).await?;
 
@@ -250,7 +258,11 @@ async fn get_with_retry(url: &str, max_attempts: usize) -> MgdlResult<Html> {
     .await
 }
 
-pub async fn scrape_to_csv(base_url: &str, manga_url: &str, max_attempts: Option<usize>) -> MgdlResult<()> {
+pub async fn scrape_to_csv(
+    base_url: &str,
+    manga_url: &str,
+    max_attempts: Option<usize>,
+) -> MgdlResult<()> {
     let max_attempts = max_attempts.unwrap_or(10);
     let (manga, chapters) = manga_from_url(base_url, manga_url, max_attempts).await?;
 

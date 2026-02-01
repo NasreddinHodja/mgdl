@@ -40,7 +40,6 @@ define_errors! {
     msg Config     => "Config error",
     msg Db         => "DB error",
     msg Scrape     => "Scrape error",
-    msg Downloader => "Downloader error",
     msg Logger     => "Logger error"
 }
 

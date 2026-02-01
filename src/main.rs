@@ -22,14 +22,16 @@ async fn run() -> MgdlResult<()> {
     let args = cli::parse();
     let config = config::Config::load()?;
     let base_url = config.base_url;
-    let dldr = downloader::Downloader::new(config.manga_dir, config.db_dir, base_url.clone(), args.log)?;
+    let dldr =
+        downloader::Downloader::new(config.manga_dir, config.db_dir, base_url.clone(), args.log)?;
 
     if args.reset {
         dldr.reset_db()?;
     } else if let Some(manga_url) = args.add {
         dldr.add(&manga_url).await?;
     } else if let Some(manga_url) = args.download {
-        dldr.download_manga(&manga_url, args.chapters.as_ref()).await?;
+        dldr.download_manga(&manga_url, args.chapters.as_ref(), args.force)
+            .await?;
     } else if let Some(manga) = args.update {
         if let Some(manga_name) = manga {
             match manga_name.as_str() {

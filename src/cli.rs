@@ -25,6 +25,10 @@ pub struct Args {
     #[arg(short, long, value_parser = ChapterRange::parse)]
     pub chapters: Option<ChapterRange>,
 
+    /// force redownload of existing pages
+    #[arg(short, long, default_value_t = false)]
+    pub force: bool,
+
     /// reset local DB
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::{fs, path::Path, path::PathBuf};
 use tokio::sync::Semaphore;
@@ -5,7 +6,7 @@ use tokio::task::JoinSet;
 
 use crate::{
     db,
-    error::{MgdlError, MgdlResult},
+    error::MgdlResult,
     logger::{LogMode, Logger},
     models::{Chapter, ChapterRange, Manga},
     scrape,
@@ -21,7 +22,12 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    pub fn new(manga_dir: PathBuf, db_dir: PathBuf, base_url: String, log_mode: LogMode) -> MgdlResult<Self> {
+    pub fn new(
+        manga_dir: PathBuf,
+        db_dir: PathBuf,
+        base_url: String,
+        log_mode: LogMode,
+    ) -> MgdlResult<Self> {
         let db = db::Db::new(db_dir.join("mgdl.db"))?;
         let logger = Logger::new(log_mode);
 
@@ -38,7 +44,8 @@ impl Downloader {
             .logger
             .add_spinner(Some("Scraping manga and chapters".to_owned()))?;
 
-        let (manga, chapters) = scrape::manga_from_url(&self.base_url, manga_url, MAX_ATTEMPTS).await?;
+        let (manga, chapters) =
+            scrape::manga_from_url(&self.base_url, manga_url, MAX_ATTEMPTS).await?;
 
         spinner.set_message(format!("Adding manga {}", &manga.name));
         let added_manga = self.db.upsert_manga(manga)?;
@@ -51,6 +58,7 @@ impl Downloader {
         &self,
         manga_url: &str,
         chapter_range: Option<&ChapterRange>,
+        force: bool,
     ) -> MgdlResult<Manga> {
         let (manga, chapters) = self.add(manga_url).await?;
         let chapters = Self::filter_by_range(chapters, chapter_range);
@@ -60,7 +68,7 @@ impl Downloader {
             .logger
             .add_spinner(Some(format!("Downloading {}", &manga.name)))?;
 
-        self.download_chapters(&manga_path, &manga.name, &chapters, None)
+        self.download_chapters(&manga_path, &manga.name, &chapters, force)
             .await?;
 
         self.logger.finish_spinner(spinner);
@@ -72,7 +80,7 @@ impl Downloader {
         manga_path: &Path,
         manga_name: &str,
         chapters: &[Chapter],
-        skip_chaps: Option<&[usize]>,
+        force: bool,
     ) -> MgdlResult<()> {
         fs::create_dir_all(manga_path)?;
 
@@ -82,25 +90,32 @@ impl Downloader {
         let progress_bar = self.logger.add_bar(chapters.len() as u64)?;
         progress_bar.set_prefix("Locating chapters and pages".to_string());
         for chapter in chapters {
-            let chapter_number = chapter
-                .number
-                .split('-')
-                .next()
-                .ok_or(MgdlError::Downloader(
-                    "Could not parse chapter number".to_string(),
-                ))?
-                .parse::<usize>()?;
+            let pages =
+                scrape::get_chapter_pages(&self.base_url, &chapter.hash, MAX_ATTEMPTS).await?;
+            let chapter_path = manga_path.join(format!("chapter_{}", &chapter.number));
 
-            if skip_chaps.is_some_and(|skips| skips.contains(&chapter_number)) {
+            let existing = existing_page_numbers(&chapter_path);
+            let new_pages: Vec<_> = if force {
+                pages
+            } else {
+                pages
+                    .into_iter()
+                    .filter(|p| !existing.contains(&p.number))
+                    .collect()
+            };
+
+            if new_pages.is_empty() {
+                progress_bar.inc(1);
+                progress_bar.success(format!(
+                    "Skipped \"{}\" - Chapter {}",
+                    manga_name, &chapter.number
+                ));
                 continue;
             }
 
-            let pages = scrape::get_chapter_pages(&self.base_url, &chapter.hash, MAX_ATTEMPTS).await?;
-            let chapter_path = manga_path.join(format!("chapter_{}", &chapter.number));
-
             fs::create_dir_all(&chapter_path)?;
 
-            for page in pages {
+            for page in new_pages {
                 let chapter_path = chapter_path.clone();
                 let permit = Arc::clone(&semaphore);
                 join_set.spawn(async move {
@@ -136,12 +151,12 @@ impl Downloader {
         let manga_url = format!("{}/series/{}", &self.base_url, &manga.hash);
 
         spinner.set_message("Scraping manga and chapters".to_owned());
-        let (new_manga, chapters) = scrape::manga_from_url(&self.base_url, &manga_url, MAX_ATTEMPTS).await?;
-        let skip_chaps = self.existing_chapter_numbers(&new_manga)?;
+        let (new_manga, chapters) =
+            scrape::manga_from_url(&self.base_url, &manga_url, MAX_ATTEMPTS).await?;
         let manga_path = self.manga_dir.join(&new_manga.normalized_name);
 
         spinner.set_message(format!("Downloading {}", &manga.name));
-        self.download_chapters(&manga_path, &manga.name, &chapters, Some(&skip_chaps))
+        self.download_chapters(&manga_path, &manga.name, &chapters, false)
             .await?;
 
         self.logger.finish_spinner(spinner);
@@ -189,30 +204,6 @@ impl Downloader {
         Ok(remaining)
     }
 
-    fn existing_chapter_numbers(&self, manga: &Manga) -> MgdlResult<Vec<usize>> {
-        let manga_path = self.manga_dir.join(&manga.normalized_name);
-        if !manga_path.exists() {
-            return Ok(vec![]);
-        }
-        let mut chapters = Vec::new();
-        for entry in fs::read_dir(&manga_path)? {
-            let entry = entry?;
-            let Some(name) = entry.file_name().into_string().ok() else {
-                continue;
-            };
-            let Some(num) = name
-                .strip_prefix("chapter_")
-                .and_then(|s| s.split('-').next())
-                .and_then(|s| s.parse().ok())
-            else {
-                continue;
-            };
-            chapters.push(num);
-        }
-
-        Ok(chapters)
-    }
-
     fn filter_by_range(chapters: Vec<Chapter>, range: Option<&ChapterRange>) -> Vec<Chapter> {
         let Some(range) = range else {
             return chapters;
@@ -233,4 +224,21 @@ impl Downloader {
         self.logger.finish_spinner(spinner);
         Ok(())
     }
+}
+
+fn existing_page_numbers(chapter_path: &Path) -> HashSet<usize> {
+    let Ok(entries) = fs::read_dir(chapter_path) else {
+        return HashSet::new();
+    };
+    entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            e.file_name()
+                .to_str()?
+                .split('.')
+                .next()?
+                .parse::<usize>()
+                .ok()
+        })
+        .collect()
 }
