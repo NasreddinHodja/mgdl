@@ -1,0 +1,31 @@
+* mgdl
+
+Download manga with Rust!
+
+** Usage
+
+#+begin_example
+Usage: mgdl [OPTIONS]
+
+Options:
+  -d, --download <URL>       URL of manga to download
+  -a, --add <URL>            URL of manga to add
+  -u, --update [<NAME>]      folder name of manga to update
+  -s, --scrape <URL>         URL of manga to scrape
+  -c, --chapters <RANGE>     chapter range (e.g., 5..10, 5.., ..10, 5)
+  -f, --force                force redownload of existing pages
+  -r, --reset                Reset local DB
+  -l, --log <MODE>           plain, fancy, or quiet [default: plain]
+  -h, --help                 Print help
+  -V, --version              Print version
+#+end_example
+
+** Testing
+
+#+begin_src sh
+cargo test                       # offline tests
+cargo test -- --ignored          # live tests (needs env vars)
+cargo test -- --include-ignored  # everything
+#+end_src
+
+Live tests require =MGDL_BASE_URL=, =MGDL_TEST_MANGA_URL=, and =MGDL_TEST_MANGA_HASH=.
