@@ -34,11 +34,14 @@ async fn run() -> MgdlResult<()> {
         config.db_dir,
         base_url.clone(),
         args.log,
+        args.verbose,
         bench.clone(),
     )?;
 
     if args.reset {
         dldr.reset_db()?;
+    } else if args.consolidate {
+        dldr.consolidate_all().await?;
     } else if let Some(manga_url) = args.add {
         dldr.add(&manga_url).await?;
     } else if let Some(manga_url) = args.download {

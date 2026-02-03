@@ -13,16 +13,21 @@ pub enum LogMode {
 
 pub struct Logger {
     mode: LogMode,
+    verbose: bool,
     multi: Option<MultiProgress>,
 }
 
 impl Logger {
-    pub fn new(mode: LogMode) -> Self {
+    pub fn new(mode: LogMode, verbose: bool) -> Self {
         let multi = match mode {
             LogMode::Fancy => Some(MultiProgress::new()),
             _ => None,
         };
-        Self { mode, multi }
+        Self {
+            mode,
+            verbose,
+            multi,
+        }
     }
 
     pub fn add_spinner(&self, msg: Option<String>) -> MgdlResult<MaybeSpinner> {
@@ -39,8 +44,10 @@ impl Logger {
                 Some(spinner)
             }
             LogMode::Plain => {
-                if let Some(ref msg) = msg {
-                    println!("[INFO] {msg}");
+                if self.verbose {
+                    if let Some(ref msg) = msg {
+                        println!("[INFO] {msg}");
+                    }
                 }
                 None
             }
@@ -50,6 +57,7 @@ impl Logger {
         Ok(MaybeSpinner {
             inner,
             mode: self.mode,
+            verbose: self.verbose,
         })
     }
 
@@ -95,6 +103,7 @@ impl Logger {
 pub struct MaybeSpinner {
     inner: Option<ProgressBar>,
     mode: LogMode,
+    verbose: bool,
 }
 
 impl MaybeSpinner {
@@ -105,7 +114,11 @@ impl MaybeSpinner {
                     s.set_message(msg);
                 }
             }
-            LogMode::Plain => println!("[INFO] {msg}"),
+            LogMode::Plain => {
+                if self.verbose {
+                    println!("[INFO] {msg}");
+                }
+            }
             LogMode::Quiet => {}
         }
     }

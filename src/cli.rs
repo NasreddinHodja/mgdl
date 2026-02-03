@@ -33,9 +33,17 @@ pub struct Args {
     #[arg(short, long, default_value_t = false)]
     pub reset: bool,
 
+    /// check all chapters for missing pages and download them
+    #[arg(short = 'o', long, default_value_t = false)]
+    pub consolidate: bool,
+
     /// logging mode: plain, fancy, or quiet
     #[arg(short, long, value_enum, default_value = "plain")]
     pub log: LogMode,
+
+    /// verbose output (show INFO messages)
+    #[arg(short, long, default_value_t = false)]
+    pub verbose: bool,
 
     /// print benchmark timing data after download
     #[arg(short, long, default_value_t = false)]

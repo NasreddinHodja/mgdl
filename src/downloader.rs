@@ -31,10 +31,11 @@ impl Downloader {
         db_dir: PathBuf,
         base_url: String,
         log_mode: LogMode,
+        verbose: bool,
         bench: Option<BenchCollector>,
     ) -> MgdlResult<Self> {
         let db = db::Db::new(db_dir.join("mgdl.db"))?;
-        let logger = Logger::new(log_mode);
+        let logger = Logger::new(log_mode, verbose);
 
         Ok(Self {
             db,
@@ -78,17 +79,18 @@ impl Downloader {
             .logger
             .add_spinner(Some(format!("Downloading {}", &manga.name)))?;
 
-        self.download_chapters(&manga_path, &manga.name, &chapters, force)
+        self.download_chapters(&manga.name, &manga_path, &chapters, force)
             .await?;
 
         self.logger.finish_spinner(spinner);
         Ok(manga)
     }
 
+    /// Download all pages for given chapters. If force=false, skip pages that already exist.
     async fn download_chapters(
         &self,
-        manga_path: &Path,
         manga_name: &str,
+        manga_path: &Path,
         chapters: &[Chapter],
         force: bool,
     ) -> MgdlResult<()> {
@@ -129,16 +131,12 @@ impl Downloader {
                 if let Some(bench) = &self.bench {
                     bench.record_chapter_skipped();
                 }
-                progress_bar.inc(1);
-                progress_bar.success(format!(
-                    "Skipped \"{}\" - Chapter {}",
-                    manga_name, &chapter.number
-                ));
                 continue;
             }
 
             fs::create_dir_all(&chapter_path)?;
 
+            let page_count = new_pages.len();
             for page in new_pages {
                 let chapter_path = chapter_path.clone();
                 let permit = Arc::clone(&semaphore);
@@ -157,8 +155,8 @@ impl Downloader {
             }
             progress_bar.inc(1);
             progress_bar.success(format!(
-                "Queued \"{}\" - Chapter {}",
-                manga_name, &chapter.number
+                "Downloaded {} ch.{} ({} pages)",
+                manga_name, &chapter.number, page_count
             ));
         }
         self.logger.finish_bar(progress_bar);
@@ -174,39 +172,74 @@ impl Downloader {
         Ok(())
     }
 
-    pub async fn update(&self, manga_name: &str) -> MgdlResult<Manga> {
+    /// Update: only download chapters that don't have a local directory yet.
+    async fn update_manga(&self, manga: &Manga) -> MgdlResult<usize> {
+        let manga_url = format!("{}/series/{}", &self.base_url, &manga.hash);
+        let (_, chapters) =
+            scrape::manga_from_url(&self.base_url, &manga_url, MAX_ATTEMPTS).await?;
+        let manga_path = self.manga_dir.join(&manga.normalized_name);
+
+        // Filter to only chapters without a local directory
+        let new_chapters: Vec<_> = chapters
+            .into_iter()
+            .filter(|ch| !manga_path.join(format!("chapter_{}", &ch.number)).exists())
+            .collect();
+
+        let count = new_chapters.len();
+        if !new_chapters.is_empty() {
+            self.download_chapters(&manga.name, &manga_path, &new_chapters, false)
+                .await?;
+        }
+
+        Ok(count)
+    }
+
+    pub async fn update(&self, manga_name: &str) -> MgdlResult<()> {
+        let manga = self.db.get_manga_by_normalized_name(manga_name)?;
         let spinner = self
             .logger
-            .add_spinner(Some("Getting local manga data".to_owned()))?;
-
-        let manga = self.db.get_manga_by_normalized_name(manga_name)?;
-        let manga_url = format!("{}/series/{}", &self.base_url, &manga.hash);
-
-        spinner.set_message("Scraping manga and chapters".to_owned());
-        let (new_manga, chapters) =
-            scrape::manga_from_url(&self.base_url, &manga_url, MAX_ATTEMPTS).await?;
-        let manga_path = self.manga_dir.join(&new_manga.normalized_name);
-
-        spinner.set_message(format!("Downloading {}", &manga.name));
-        self.download_chapters(&manga_path, &manga.name, &chapters, false)
-            .await?;
-
+            .add_spinner(Some(format!("Updating {}", &manga.name)))?;
+        self.update_manga(&manga).await?;
         self.logger.finish_spinner(spinner);
-        Ok(new_manga)
+        Ok(())
     }
 
     pub async fn update_all(&self) -> MgdlResult<()> {
-        let spinner = self.logger.add_spinner(None)?;
-
-        spinner.set_message("Cleaning up missing manga directories".to_owned());
         let ongoing_manga = self.cleanup_missing_manga_dirs()?;
 
         for manga in ongoing_manga {
-            spinner.set_message(format!("Trying to update {}", &manga.name));
-            self.update(&manga.normalized_name).await?;
+            let spinner = self
+                .logger
+                .add_spinner(Some(format!("Updating {}", &manga.name)))?;
+            self.update_manga(&manga).await?;
+            self.logger.finish_spinner(spinner);
         }
 
-        self.logger.finish_spinner(spinner);
+        Ok(())
+    }
+
+    /// Consolidate: check all chapters for missing pages and download them.
+    async fn consolidate_manga(&self, manga: &Manga) -> MgdlResult<()> {
+        let manga_url = format!("{}/series/{}", &self.base_url, &manga.hash);
+        let (_, chapters) =
+            scrape::manga_from_url(&self.base_url, &manga_url, MAX_ATTEMPTS).await?;
+        let manga_path = self.manga_dir.join(&manga.normalized_name);
+        self.download_chapters(&manga.name, &manga_path, &chapters, false)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn consolidate_all(&self) -> MgdlResult<()> {
+        let ongoing_manga = self.db.get_ongoing_manga()?;
+
+        for manga in ongoing_manga {
+            let spinner = self
+                .logger
+                .add_spinner(Some(format!("Consolidating {}", &manga.name)))?;
+            self.consolidate_manga(&manga).await?;
+            self.logger.finish_spinner(spinner);
+        }
+
         Ok(())
     }
 
