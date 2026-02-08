@@ -46,6 +46,7 @@ pub struct Args {
     pub verbose: bool,
 
     /// print benchmark timing data after download
+    #[cfg(feature = "bench")]
     #[arg(short, long, default_value_t = false)]
     pub bench: bool,
 }

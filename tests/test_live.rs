@@ -17,13 +17,18 @@ fn manga_hash() -> String {
         .expect("MGDL_TEST_MANGA_HASH env var must be set for live tests")
 }
 
+fn client() -> reqwest::Client {
+    reqwest::Client::new()
+}
+
 #[tokio::test]
 #[ignore]
 async fn test_live_manga_scrape() {
+    let client = client();
     let manga_url = manga_url();
     let manga_hash = manga_hash();
 
-    let html = get_with_retry(&manga_url, 3)
+    let html = get_with_retry(&client, &manga_url, 3)
         .await
         .expect("Failed to fetch manga page");
 
@@ -49,11 +54,12 @@ async fn test_live_manga_scrape() {
 #[tokio::test]
 #[ignore]
 async fn test_live_chapter_list() {
+    let client = client();
     let base_url = base_url();
     let manga_hash = manga_hash();
 
     let url = format!("{}/series/{}/full-chapter-list", base_url, manga_hash);
-    let html = get_with_retry(&url, 3)
+    let html = get_with_retry(&client, &url, 3)
         .await
         .expect("Failed to fetch chapter list");
 
@@ -82,16 +88,17 @@ async fn test_live_chapter_list() {
 #[tokio::test]
 #[ignore]
 async fn test_live_chapter_pages() {
+    let client = client();
     let base_url = base_url();
     let manga_hash = manga_hash();
 
     let url = format!("{}/series/{}/full-chapter-list", base_url, manga_hash);
-    let html = get_with_retry(&url, 3).await.unwrap();
+    let html = get_with_retry(&client, &url, 3).await.unwrap();
     let chapters = parse_chapters_from_html(&html).unwrap();
     assert!(!chapters.is_empty(), "Need at least one chapter");
 
     let last_chapter = chapters.last().unwrap();
-    let pages = get_chapter_pages(&base_url, &last_chapter.hash, 3)
+    let pages = get_chapter_pages(&client, &base_url, &last_chapter.hash, 3)
         .await
         .expect(
             "UPSTREAM FORMAT CHANGE: failed to fetch chapter pages — site likely changed their HTML structure",
@@ -115,11 +122,12 @@ async fn test_live_chapter_pages() {
 #[tokio::test]
 #[ignore]
 async fn test_live_full_manga_from_url() {
+    let client = client();
     let base_url = base_url();
     let manga_url = manga_url();
     let manga_hash = manga_hash();
 
-    let (manga, chapters) = manga_from_url(&base_url, &manga_url, 3)
+    let (manga, chapters) = manga_from_url(&client, &base_url, &manga_url, 3)
         .await
         .expect("UPSTREAM FORMAT CHANGE: manga_from_url failed end-to-end");
 
@@ -131,19 +139,23 @@ async fn test_live_full_manga_from_url() {
 #[tokio::test]
 #[ignore]
 async fn test_live_page_download() {
+    let client = client();
     let base_url = base_url();
     let manga_hash = manga_hash();
 
     let dir = tempfile::TempDir::new().unwrap();
     let url = format!("{}/series/{}/full-chapter-list", base_url, manga_hash);
-    let html = get_with_retry(&url, 3).await.unwrap();
+    let html = get_with_retry(&client, &url, 3).await.unwrap();
     let chapters = parse_chapters_from_html(&html).unwrap();
     let last = chapters.last().unwrap();
 
-    let pages = get_chapter_pages(&base_url, &last.hash, 3).await.unwrap();
+    let pages = get_chapter_pages(&client, &base_url, &last.hash, 3)
+        .await
+        .unwrap();
     let first_page = &pages[0];
 
     mgdl::scrape::download_page(
+        &client,
         first_page.url.clone(),
         dir.path().to_path_buf(),
         first_page.number,
@@ -169,9 +181,10 @@ async fn test_live_page_download() {
 #[tokio::test]
 #[ignore]
 async fn test_live_retry_mechanism() {
+    let client = client();
     let manga_url = manga_url();
 
-    let result = get_with_retry(&manga_url, 2).await;
+    let result = get_with_retry(&client, &manga_url, 2).await;
     assert!(
         result.is_ok(),
         "get_with_retry should succeed on a valid URL: {:?}",

@@ -1,12 +1,6 @@
 mod common;
 
 use mgdl::scrape::{parse_chapters_from_html, parse_manga_from_html, parse_pages_from_html};
-use scraper::Html;
-
-fn load_html(fixture: &str) -> Html {
-    let text = common::load_fixture(fixture);
-    Html::parse_document(&text)
-}
 
 // URL only used for extract_hash parsing — domain is irrelevant
 const FIXTURE_MANGA_URL: &str =
@@ -14,7 +8,7 @@ const FIXTURE_MANGA_URL: &str =
 
 #[test]
 fn parse_manga_name_and_hash() {
-    let html = load_html("manga_page.html");
+    let html = common::load_fixture("manga_page.html");
     let manga = parse_manga_from_html(&html, FIXTURE_MANGA_URL).unwrap();
 
     assert!(
@@ -32,7 +26,7 @@ fn parse_manga_name_and_hash() {
 
 #[test]
 fn parse_manga_authors_and_status() {
-    let html = load_html("manga_page.html");
+    let html = common::load_fixture("manga_page.html");
     let manga = parse_manga_from_html(&html, FIXTURE_MANGA_URL).unwrap();
 
     assert!(
@@ -47,14 +41,14 @@ fn parse_manga_authors_and_status() {
 
 #[test]
 fn parse_manga_bad_url_fails() {
-    let html = load_html("manga_page.html");
+    let html = common::load_fixture("manga_page.html");
     let result = parse_manga_from_html(&html, "https://example.com/no-series");
     assert!(result.is_err());
 }
 
 #[test]
 fn parse_chapters_count_and_hashes() {
-    let html = load_html("chapter_list.html");
+    let html = common::load_fixture("chapter_list.html");
     let chapters = parse_chapters_from_html(&html).unwrap();
 
     assert!(
@@ -74,7 +68,7 @@ fn parse_chapters_count_and_hashes() {
 
 #[test]
 fn parse_chapters_number_format() {
-    let html = load_html("chapter_list.html");
+    let html = common::load_fixture("chapter_list.html");
     let chapters = parse_chapters_from_html(&html).unwrap();
 
     for ch in &chapters {
@@ -102,7 +96,7 @@ fn parse_chapters_number_format() {
 
 #[test]
 fn parse_pages_count_and_urls() {
-    let html = load_html("chapter_pages.html");
+    let html = common::load_fixture("chapter_pages.html");
     let pages = parse_pages_from_html(&html).unwrap();
 
     assert!(
@@ -122,7 +116,7 @@ fn parse_pages_count_and_urls() {
 
 #[test]
 fn parse_pages_sequential_numbers() {
-    let html = load_html("chapter_pages.html");
+    let html = common::load_fixture("chapter_pages.html");
     let pages = parse_pages_from_html(&html).unwrap();
 
     let mut numbers: Vec<usize> = pages.iter().map(|p| p.number).collect();
@@ -136,8 +130,7 @@ fn parse_pages_sequential_numbers() {
 
 #[test]
 fn parse_pages_empty_html_fails() {
-    let html = Html::parse_document("<html><body></body></html>");
-    let result = parse_pages_from_html(&html);
+    let result = parse_pages_from_html("<html><body></body></html>");
     assert!(
         result.is_err(),
         "Empty HTML should fail with no pages error"
@@ -146,7 +139,6 @@ fn parse_pages_empty_html_fails() {
 
 #[test]
 fn parse_chapters_empty_html() {
-    let html = Html::parse_document("<html><body></body></html>");
-    let chapters = parse_chapters_from_html(&html).unwrap();
+    let chapters = parse_chapters_from_html("<html><body></body></html>").unwrap();
     assert!(chapters.is_empty());
 }

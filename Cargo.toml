@@ -3,20 +3,29 @@ name = "mgdl"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+bench = ["dep:csv", "dep:serde_json", "dep:chrono", "dep:uuid"]
+
 [dependencies]
 rusqlite = { version = "0.33.0", features = ["bundled"] }
 directories = "6.0"
 toml = "0.8.20"
 serde = { version = "1.0.217", features = ["derive"] }
 clap = { version = "4.5.30", features = ["derive"] }
-reqwest = { version = "0.12.12" }
-tokio = { version = "1", features = ["full"] }
-scraper = "0.23.1"
+reqwest = { version = "0.12.12", default-features = false, features = ["rustls-tls", "charset", "gzip"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "fs", "time"] }
 indicatif = "0.17.11"
-uuid = { version = "1.4", features = ["v4"] }
-csv = "1.4.0"
-serde_json = "1.0"
-chrono = "0.4"
+
+# bench-only deps
+uuid = { version = "1.4", features = ["v4"], optional = true }
+csv = { version = "1.4.0", optional = true }
+serde_json = { version = "1.0", optional = true }
+chrono = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
