@@ -105,11 +105,13 @@ impl Downloader {
     ) -> MgdlResult<()> {
         fs::create_dir_all(manga_path)?;
 
-        let mut join_set: JoinSet<MgdlResult<()>> = JoinSet::new();
         let semaphore = Arc::new(Semaphore::new(16));
 
         let progress_bar = self.logger.add_bar(chapters.len() as u64)?;
-        progress_bar.set_prefix("Locating chapters and pages".to_string());
+        progress_bar.set_prefix("Fetching chapter metadata".to_string());
+
+        // Phase 1: fetch page metadata sequentially, spawn chapter download tasks
+        let mut chapter_tasks: JoinSet<MgdlResult<(String, usize)>> = JoinSet::new();
         for chapter in chapters {
             let ch_start = Instant::now();
             let pages = scrape::get_chapter_pages(
@@ -151,53 +153,67 @@ impl Downloader {
                 if let Some(bench) = &self.bench {
                     bench.record_chapter_skipped();
                 }
+                progress_bar.inc(1);
                 continue;
             }
 
             fs::create_dir_all(&chapter_path)?;
 
             let page_count = new_pages.len();
-            for page in new_pages {
-                let chapter_path = chapter_path.clone();
-                let permit = Arc::clone(&semaphore);
-                let client = self.client.clone();
-                #[cfg(feature = "bench")]
-                let bench = self.bench.clone();
-                join_set.spawn(async move {
-                    let _permit = permit.acquire().await.unwrap();
-                    let page_start = Instant::now();
-                    let bytes = scrape::download_page(
-                        &client,
-                        page.url,
-                        chapter_path,
-                        page.number,
-                        MAX_ATTEMPTS,
-                    )
-                    .await?;
+            let label = format!("{} ch.{}", manga_name, &chapter.number);
+            let sem = Arc::clone(&semaphore);
+            let client = self.client.clone();
+            #[cfg(feature = "bench")]
+            let bench = self.bench.clone();
+            chapter_tasks.spawn(async move {
+                let mut page_set: JoinSet<MgdlResult<()>> = JoinSet::new();
+                for page in new_pages {
+                    let chapter_path = chapter_path.clone();
+                    let permit = Arc::clone(&sem);
+                    let client = client.clone();
                     #[cfg(feature = "bench")]
-                    if let Some(bench) = &bench {
-                        bench.record_page_downloaded(page_start.elapsed(), bytes);
-                    }
-                    let _ = page_start;
-                    let _ = bytes;
-                    Ok(())
-                });
-            }
+                    let bench = bench.clone();
+                    page_set.spawn(async move {
+                        let _permit = permit.acquire().await.unwrap();
+                        let page_start = Instant::now();
+                        let bytes = scrape::download_page(
+                            &client,
+                            page.url,
+                            chapter_path,
+                            page.number,
+                            MAX_ATTEMPTS,
+                        )
+                        .await?;
+                        #[cfg(feature = "bench")]
+                        if let Some(bench) = &bench {
+                            bench.record_page_downloaded(page_start.elapsed(), bytes);
+                        }
+                        let _ = page_start;
+                        let _ = bytes;
+                        Ok(())
+                    });
+                }
+                while let Some(res) = page_set.join_next().await {
+                    res??;
+                }
+                Ok((label, page_count))
+            });
             progress_bar.inc(1);
-            progress_bar.success(format!(
-                "Queued {} ch.{} ({} pages)",
-                manga_name, &chapter.number, page_count
-            ));
         }
         self.logger.finish_bar(progress_bar);
 
-        let progress_bar = self.logger.add_bar(join_set.len() as u64)?;
-        progress_bar.set_prefix("Downloading pages".to_string());
-        while let Some(res) = join_set.join_next().await {
-            res??;
-            progress_bar.inc(1);
+        // Phase 2: wait for chapter downloads, report as each completes
+        let total = chapter_tasks.len() as u64;
+        if total > 0 {
+            let progress_bar = self.logger.add_bar(total)?;
+            progress_bar.set_prefix("Downloading".to_string());
+            while let Some(res) = chapter_tasks.join_next().await {
+                let (label, page_count) = res??;
+                progress_bar.inc(1);
+                progress_bar.success(format!("Downloaded {} ({} pages)", label, page_count));
+            }
+            self.logger.finish_bar(progress_bar);
         }
-        self.logger.finish_bar(progress_bar);
 
         Ok(())
     }

@@ -200,16 +200,6 @@ pub async fn download_page(
     page_number: usize,
     max_attempts: usize,
 ) -> MgdlResult<usize> {
-    let response = retry(
-        || async { Ok(client.get(&page_url).send().await?) },
-        max_attempts,
-        INITIAL_DELAY,
-    )
-    .await?;
-
-    let bytes = response.bytes().await?;
-    let byte_count = bytes.len();
-
     let url_without_query = page_url.split('?').next().unwrap_or(&page_url);
     let file_ext = url_without_query
         .split('.')
@@ -218,6 +208,17 @@ pub async fn download_page(
             "Could not find file extension".to_string(),
         ))?;
 
+    let bytes = retry(
+        || async {
+            let response = client.get(&page_url).send().await?;
+            Ok(response.bytes().await?)
+        },
+        max_attempts,
+        INITIAL_DELAY,
+    )
+    .await?;
+
+    let byte_count = bytes.len();
     let file_path = chapter_path.join(format!("{:03}.{}", page_number, file_ext));
     let mut file = fs::File::create(&file_path).await?;
     file.write_all(&bytes).await?;
